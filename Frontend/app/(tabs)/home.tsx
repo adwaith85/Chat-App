@@ -1,11 +1,28 @@
+import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, TextInput, FlatList } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from 'expo-image';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
 export default function Home() {
+  const [userName, setUserName] = useState('');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadUser = async () => {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const parsed = JSON.parse(userData);
+          setUserName(parsed.name.split(' ')[0]); // Get first name
+        }
+      };
+      loadUser();
+    }, [])
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
@@ -13,10 +30,10 @@ export default function Home() {
       {/* Top Header */}
       <View style={styles.header}>
         <View>
-          {/* <Text style={styles.greetingText}>Hello,</Text> */}
+          <Text style={styles.greetingText}>Hello, {userName || 'Explorer'}</Text>
           <Text style={styles.userNameText}>Talkies</Text>
         </View>
-        <Ionicons name="search-outline" size={26} color="#000000ff" />
+        <Ionicons name="search-outline" size={26} color="#1e293b" />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>

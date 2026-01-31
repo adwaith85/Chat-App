@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,26 +8,63 @@ import {
     ScrollView,
     KeyboardAvoidingView,
     Platform,
+    Alert,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi } from '../../api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const ProfileEditScreen = () => {
-    // Mock initial data
     const [formData, setFormData] = useState({
-        name: 'Adwaith',
-        email: 'adwaith@example.com',
-        mobile: '+91 9876543210',
+        name: '',
+        email: '',
+        mobile: '',
         profileImage: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200',
     });
+    const [loading, setLoading] = useState(false);
 
-    const handleSave = () => {
-        // Save logic will go here
-        console.log('Saving profile...', formData);
-        router.back();
+    useEffect(() => {
+        const loadUserData = async () => {
+            const userData = await AsyncStorage.getItem('user');
+            if (userData) {
+                const parsed = JSON.parse(userData);
+                setFormData(prev => ({
+                    ...prev,
+                    name: parsed.name || '',
+                    email: parsed.email || '',
+                    mobile: parsed.mobile || '',
+                }));
+            }
+        };
+        loadUserData();
+    }, []);
+
+    const handleSave = async () => {
+        if (!formData.name) {
+            Alert.alert('Error', 'Name is required');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await authApi.updateProfile({
+                name: formData.name,
+                email: formData.email,
+                mobile: formData.mobile,
+            });
+            Alert.alert('Success', 'Profile updated successfully');
+            router.back();
+        } catch (error: any) {
+            console.error('Error updating profile:', error);
+            Alert.alert('Error', error.response?.data?.message || 'Failed to update profile');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const InputField = ({ label, value, onChangeText, icon, keyboardType = 'default' }: any) => (
@@ -61,8 +98,12 @@ const ProfileEditScreen = () => {
                         <Ionicons name="chevron-back" size={24} color="#111827" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Edit Profile</Text>
-                    <TouchableOpacity onPress={handleSave}>
-                        <Text style={styles.saveText}>Save</Text>
+                    <TouchableOpacity onPress={handleSave} disabled={loading}>
+                        {loading ? (
+                            <ActivityIndicator size="small" color="#4F46E5" />
+                        ) : (
+                            <Text style={styles.saveText}>Save</Text>
+                        )}
                     </TouchableOpacity>
                 </View>
 

@@ -83,7 +83,7 @@ export default function LandingScreen() {
         >
           <TouchableOpacity
             style={styles.primaryBtn}
-            onPress={() => router.push("/home")}
+            onPress={() => router.push("/login")}
             activeOpacity={0.8}
           >
             <Text style={styles.primaryBtnText}>Get Started</Text>

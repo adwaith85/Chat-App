@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -6,28 +6,64 @@ import {
     TouchableOpacity,
     ScrollView,
     Dimensions,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi } from '../../api';
 import Animated, {
     FadeInDown,
     FadeInRight,
-    useAnimatedStyle,
-    withSpring
 } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
 const ProfileScreen = () => {
-    // Mock user data - in a real app, this would come from a global state or API
-    const user = {
-        name: 'Adwaith',
-        email: 'adwaith@example.com',
-        mobile: '+91 9876543210',
+    const [user, setUser] = useState({
+        name: 'Loading...',
+        email: '',
+        mobile: '',
         profileImage: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200',
         isOnline: true,
+    });
+
+    const fetchUserData = async () => {
+        try {
+            const response = await authApi.getMe();
+            setUser(prev => ({
+                ...prev,
+                ...response.data,
+                // keep mock image for now since backend doesn't support image upload yet
+                profileImage: prev.profileImage
+            }));
+            await AsyncStorage.setItem('user', JSON.stringify(response.data));
+        } catch (error) {
+            console.error('Error fetching user data:', error);
+        }
+    };
+
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchUserData();
+        }, [])
+    );
+
+    const handleLogout = async () => {
+        Alert.alert('Logout', 'Are you sure you want to logout?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Logout',
+                style: 'destructive',
+                onPress: async () => {
+                    await AsyncStorage.removeItem('token');
+                    await AsyncStorage.removeItem('user');
+                    router.replace('/dash');
+                }
+            }
+        ]);
     };
 
     const menuItems = [
@@ -56,7 +92,7 @@ const ProfileScreen = () => {
             id: 'logout',
             title: 'Logout',
             icon: 'log-out-outline',
-            onPress: () => { },
+            onPress: handleLogout,
             color: '#EF4444',
             isDestructive: true,
         },
