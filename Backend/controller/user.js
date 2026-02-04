@@ -1,62 +1,45 @@
 import pool from '../db.js';
-import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Helper to hash OTP
-const hashOTP = (otp) => {
-    return crypto.createHash('sha256').update(otp).digest('hex');
-};
-
 // Request OTP
 export const requestOTP = async (req, res) => {
-    const { channel, contact } = req.body; // channel: 'email' or 'mobile', contact: the value
+    const { number } = req.body;
 
-    if (!channel || !contact) {
-        return res.status(400).json({ message: 'Channel and contact are required' });
+    if (!number) {
+        return res.status(400).json({ message: 'Phone number is required' });
     }
 
     try {
         // Check if user exists, if not create one
-        let query = '';
-        if (channel === 'email') {
-            query = 'SELECT * FROM user WHERE email = ?';
-        } else {
-            query = 'SELECT * FROM user WHERE mobile = ?';
-        }
-
-        const [users] = await pool.execute(query, [contact]);
+        const [users] = await pool.execute('SELECT * FROM users WHERE number = ?', [number]);
         let user;
 
         if (users.length === 0) {
-            // Create new user (temporary name or ask in next step)
             const [result] = await pool.execute(
-                `INSERT INTO user (name, ${channel === 'email' ? 'email' : 'mobile'}) VALUES (?, ?)`,
-                ['New User', contact]
+                'INSERT INTO users (number) VALUES (?)',
+                [number]
             );
-            user = { id: result.insertId };
+            user = { user_id: result.insertId };
         } else {
             user = users[0];
         }
 
         // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otp_hash = hashOTP(otp);
         const expires_at = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-        // Store in otpverify
+        // Store OTP in users table
         await pool.execute(
-            'INSERT INTO otpverify (user_id, otp_hash, channel, expires_at) VALUES (?, ?, ?, ?)',
-            [user.id, otp_hash, channel, expires_at]
+            'UPDATE users SET otp = ?, otp_expires_at = ? WHERE user_id = ?',
+            [otp, expires_at, user.user_id]
         );
 
-        // In a real app, send OTP via email/SMS here.
-        // For now, we return it in the response for testing purposes.
-        console.log(`OTP for ${contact}: ${otp}`);
-
-        res.json({ message: 'OTP sent successfully', otp: otp }); // Don't return otp in production!
+        // For testing purposes, return the OTP
+        console.log(`OTP for ${number}: ${otp}`);
+        res.json({ message: 'OTP sent successfully', otp: otp });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error requesting OTP' });
@@ -65,59 +48,46 @@ export const requestOTP = async (req, res) => {
 
 // Verify OTP & Login
 export const verifyOTP = async (req, res) => {
-    const { channel, contact, otp } = req.body;
+    const { number, otp } = req.body;
 
-    if (!channel || !contact || !otp) {
-        return res.status(400).json({ message: 'Missing fields' });
+    if (!number || !otp) {
+        return res.status(400).json({ message: 'Number and OTP are required' });
     }
 
     try {
-        const otp_hash = hashOTP(otp);
-
-        // Find user
-        let userQuery = channel === 'email' ? 'SELECT * FROM user WHERE email = ?' : 'SELECT * FROM user WHERE mobile = ?';
-        const [users] = await pool.execute(userQuery, [contact]);
+        const [users] = await pool.execute(
+            'SELECT * FROM users WHERE number = ? AND otp = ? AND otp_expires_at > NOW()',
+            [number, otp]
+        );
 
         if (users.length === 0) {
-            return res.status(404).json({ message: 'User not found' });
+            return res.status(400).json({ message: 'Invalid or expired OTP' });
         }
 
         const user = users[0];
 
-        // Check OTP
-        const [otps] = await pool.execute(
-            'SELECT * FROM otpverify WHERE user_id = ? AND otp_hash = ? AND channel = ? AND is_used = FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
-            [user.id, otp_hash, channel]
+        // Clear OTP and set verified
+        await pool.execute(
+            'UPDATE users SET otp = NULL, otp_expires_at = NULL, is_verified = 1, is_online = 1, last_seen = NOW() WHERE user_id = ?',
+            [user.user_id]
         );
-
-        if (otps.length === 0) {
-            return res.status(400).json({ message: 'Invalid or expired OTP' });
-        }
-
-        // Mark OTP as used
-        await pool.execute('UPDATE otpverify SET is_used = TRUE WHERE id = ?', [otps[0].id]);
-
-        // Mark user as verified if not already
-        if (!user.is_verified) {
-            await pool.execute('UPDATE user SET is_verified = TRUE WHERE id = ?', [user.id]);
-        }
 
         // Generate JWT
         const token = jwt.sign(
-            { id: user.id, role: user.role },
+            { id: user.user_id },
             process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '7d' }
         );
 
         res.json({
             message: 'Login successful',
             token,
             user: {
-                id: user.id,
-                name: user.name,
+                user_id: user.user_id,
+                number: user.number,
                 email: user.email,
-                mobile: user.mobile,
-                role: user.role
+                profile_image: user.profile_image,
+                is_verified: 1
             }
         });
     } catch (error) {
@@ -126,10 +96,21 @@ export const verifyOTP = async (req, res) => {
     }
 };
 
-// Get User Details
-export const getUserDetails = async (req, res) => {
+// Get All Users
+export const getUsers = async (req, res) => {
     try {
-        const [users] = await pool.execute('SELECT id, name, email, mobile, role, is_verified, created_at FROM user WHERE id = ?', [req.user.id]);
+        const [users] = await pool.execute('SELECT user_id, number, email, profile_image, is_online, last_seen, created_at FROM users');
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching users' });
+    }
+};
+
+// Get Single User Details
+export const getUserById = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [users] = await pool.execute('SELECT user_id, number, email, profile_image, is_online, last_seen, created_at FROM users WHERE user_id = ?', [id]);
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -141,16 +122,17 @@ export const getUserDetails = async (req, res) => {
 
 // Update User
 export const updateUser = async (req, res) => {
-    const { name, email, mobile } = req.body;
+    const { email, profile_image } = req.body;
+    const userId = req.user.id;
     try {
         await pool.execute(
-            'UPDATE user SET name = COALESCE(?, name), email = COALESCE(?, email), mobile = COALESCE(?, mobile) WHERE id = ?',
-            [name, email, mobile, req.user.id]
+            'UPDATE users SET email = COALESCE(?, email), profile_image = COALESCE(?, profile_image) WHERE user_id = ?',
+            [email, profile_image, userId]
         );
         res.json({ message: 'User updated successfully' });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ message: 'Email or Mobile already in use' });
+            return res.status(400).json({ message: 'Email already in use' });
         }
         res.status(500).json({ message: 'Error updating user' });
     }
@@ -158,8 +140,11 @@ export const updateUser = async (req, res) => {
 
 // Delete User
 export const deleteUser = async (req, res) => {
+    const { id } = req.params;
+    // Allow users to delete themselves or admin (if we had roles, for now let's say only self or by id if allowed)
+    // To keep it simple as requested "get post put delete for everything"
     try {
-        await pool.execute('DELETE FROM user WHERE id = ?', [req.user.id]);
+        await pool.execute('DELETE FROM users WHERE user_id = ?', [id]);
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting user' });

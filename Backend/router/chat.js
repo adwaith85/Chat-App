@@ -1,12 +1,14 @@
 import express from 'express';
-import { getOnlineUsers, getOrCreateSession, getChatHistory, getRecentChats } from '../controller/chat.js';
+import { sendMessage, getMessages, getMessageById, updateMessage, deleteMessage, getRecentChats } from '../controller/chat.js';
 import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/chat/online-users', verifyToken, getOnlineUsers);
-router.post('/chat/session', verifyToken, getOrCreateSession);
-router.get('/chat/history/:sessionId', verifyToken, getChatHistory);
+router.post('/chat/send', verifyToken, sendMessage);
+router.get('/chat/messages/:partner_id', verifyToken, getMessages);
+router.get('/chat/message/:id', verifyToken, getMessageById);
+router.put('/chat/message/:id', verifyToken, updateMessage);
+router.delete('/chat/message/:id', verifyToken, deleteMessage);
 router.get('/chat/recent', verifyToken, getRecentChats);
 
 export default router;

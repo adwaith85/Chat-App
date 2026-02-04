@@ -1,92 +1,134 @@
 import pool from '../db.js';
 
-// Get all online users (excluding self)
-export const getOnlineUsers = async (req, res) => {
-    const userId = req.user.id;
-    try {
-        const [users] = await pool.execute(
-            `SELECT u.id, u.name, u.email, us.is_online, us.last_seen 
-       FROM user u 
-       JOIN userstatus us ON u.id = us.user_id 
-       WHERE us.is_online = TRUE AND u.id != ?`,
-            [userId]
-        );
-        res.json(users);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error fetching online users' });
-    }
-};
+// Send Message
+export const sendMessage = async (req, res) => {
+    const { receiver_id, message, message_type } = req.body;
+    const sender_id = req.user.id;
 
-// Get or Create Chat Session between two users
-export const getOrCreateSession = async (req, res) => {
-    const user1_id = req.user.id;
-    const { user2_id } = req.body;
-
-    if (!user2_id) {
-        return res.status(400).json({ message: 'Target user ID is required' });
+    if (!receiver_id || (!message && message_type === 'text')) {
+        return res.status(400).json({ message: 'Receiver ID and message are required' });
     }
 
     try {
-        // Ensure user1_id < user2_id for unique constraint
-        const u1 = Math.min(user1_id, user2_id);
-        const u2 = Math.max(user1_id, user2_id);
-
-        // Check if active session exists
-        const [sessions] = await pool.execute(
-            'SELECT id FROM chat_sessions WHERE ((user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)) AND status = "active"',
-            [u1, u2, u2, u1]
-        );
-
-        if (sessions.length > 0) {
-            return res.json({ sessionId: sessions[0].id });
-        }
-
-        // Create new session
         const [result] = await pool.execute(
-            'INSERT INTO chat_sessions (user1_id, user2_id, status) VALUES (?, ?, "active")',
-            [u1, u2]
+            'INSERT INTO messages (sender_id, receiver_id, message, message_type) VALUES (?, ?, ?, ?)',
+            [sender_id, receiver_id, message || null, message_type || 'text']
         );
 
-        res.json({ sessionId: result.insertId });
+        const newMessage = {
+            message_id: result.insertId,
+            sender_id,
+            receiver_id,
+            message,
+            message_type: message_type || 'text',
+            status: 'sent',
+            sent_at: new Date()
+        };
+
+        res.status(201).json(newMessage);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error creating chat session' });
+        res.status(500).json({ message: 'Error sending message' });
     }
 };
 
-// Get Chat History for a session
-export const getChatHistory = async (req, res) => {
-    const { sessionId } = req.params;
+// Get Messages between two users
+export const getMessages = async (req, res) => {
+    const { partner_id } = req.params;
+    const userId = req.user.id;
+
     try {
         const [messages] = await pool.execute(
-            `SELECT m.*, u.name as sender_name 
-       FROM messages m 
-       JOIN user u ON m.sender_id = u.id 
-       WHERE m.chat_session_id = ? 
-       ORDER BY m.created_at ASC`,
-            [sessionId]
+            `SELECT * FROM messages 
+             WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+             AND is_deleted = 0
+             ORDER BY sent_at ASC`,
+            [userId, partner_id, partner_id, userId]
         );
         res.json(messages);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error fetching chat history' });
+        res.status(500).json({ message: 'Error fetching messages' });
     }
 };
 
-// Get all recent chats for the user
+// Get Single Message By ID
+export const getMessageById = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [messages] = await pool.execute('SELECT * FROM messages WHERE message_id = ?', [id]);
+        if (messages.length === 0) {
+            return res.status(404).json({ message: 'Message not found' });
+        }
+        res.json(messages[0]);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching message' });
+    }
+};
+
+// Update Message (e.g., status to 'read')
+export const updateMessage = async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    try {
+        let updateQuery = 'UPDATE messages SET status = ?';
+        const params = [status];
+
+        if (status === 'delivered') {
+            updateQuery += ', delivered_at = NOW()';
+        } else if (status === 'read') {
+            updateQuery += ', read_at = NOW()';
+        }
+
+        updateQuery += ' WHERE message_id = ?';
+        params.push(id);
+
+        await pool.execute(updateQuery, params);
+        res.json({ message: 'Message updated successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating message' });
+    }
+};
+
+// Delete Message (Soft Delete)
+export const deleteMessage = async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.execute('UPDATE messages SET is_deleted = 1 WHERE message_id = ?', [id]);
+        res.json({ message: 'Message deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting message' });
+    }
+};
+
+// Get Recent Chats (List of users chatted with)
 export const getRecentChats = async (req, res) => {
     const userId = req.user.id;
+
     try {
+        // This query finds the latest message for each contact the user has interacted with
         const [chats] = await pool.execute(
-            `SELECT cs.id as sessionId, cs.status, u.id as partnerId, u.name as partnerName, 
-              (SELECT message FROM messages WHERE chat_session_id = cs.id ORDER BY created_at DESC LIMIT 1) as lastMessage,
-              (SELECT created_at FROM messages WHERE chat_session_id = cs.id ORDER BY created_at DESC LIMIT 1) as lastMessageTime
-       FROM chat_sessions cs
-       JOIN user u ON (cs.user1_id = u.id OR cs.user2_id = u.id)
-       WHERE (cs.user1_id = ? OR cs.user2_id = ?) AND u.id != ?
-       ORDER BY lastMessageTime DESC`,
-            [userId, userId, userId]
+            `SELECT 
+                u.user_id, 
+                u.number, 
+                u.email, 
+                u.profile_image, 
+                u.is_online,
+                m.message as last_message, 
+                m.sent_at as last_message_time,
+                m.status as last_message_status
+             FROM users u
+             JOIN messages m ON (u.user_id = m.sender_id OR u.user_id = m.receiver_id)
+             WHERE (m.sender_id = ? OR m.receiver_id = ?) AND u.user_id != ?
+             AND m.sent_at = (
+                SELECT MAX(sent_at) 
+                FROM messages 
+                WHERE (sender_id = ? AND receiver_id = u.user_id) 
+                   OR (sender_id = u.user_id AND receiver_id = ?)
+             )
+             ORDER BY m.sent_at DESC`,
+            [userId, userId, userId, userId, userId]
         );
         res.json(chats);
     } catch (error) {
