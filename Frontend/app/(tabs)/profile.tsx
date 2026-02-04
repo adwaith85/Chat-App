@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -13,7 +13,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi } from '../../api';
+import { userApi, authApi } from '../../api';
 import Animated, {
     FadeInDown,
     FadeInRight,
@@ -22,26 +22,18 @@ import Animated, {
 const { width } = Dimensions.get('window');
 
 const ProfileScreen = () => {
-    const [user, setUser] = useState({
-        name: 'Loading...',
-        email: '',
-        mobile: '',
-        profileImage: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200',
-        isOnline: true,
-    });
+    const [user, setUser] = useState<any>(null);
 
     const fetchUserData = async () => {
         try {
-            const response = await authApi.getMe();
-            setUser(prev => ({
-                ...prev,
-                ...response.data,
-                // keep mock image for now since backend doesn't support image upload yet
-                profileImage: prev.profileImage
-            }));
-            await AsyncStorage.setItem('user', JSON.stringify(response.data));
+            const response = await userApi.getMe();
+            const userData = response.data.user;
+            setUser(userData);
+            await AsyncStorage.setItem('user', JSON.stringify(userData));
         } catch (error) {
             console.error('Error fetching user data:', error);
+            const localUser = await AsyncStorage.getItem('user');
+            if (localUser) setUser(JSON.parse(localUser));
         }
     };
 
@@ -58,6 +50,11 @@ const ProfileScreen = () => {
                 text: 'Logout',
                 style: 'destructive',
                 onPress: async () => {
+                    try {
+                        await authApi.logout();
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                    }
                     await AsyncStorage.removeItem('token');
                     await AsyncStorage.removeItem('user');
                     router.replace('/dash');
@@ -82,13 +79,6 @@ const ProfileScreen = () => {
             color: '#6B7280',
         },
         {
-            id: 'help',
-            title: 'Help & Support',
-            icon: 'help-circle-outline',
-            onPress: () => { },
-            color: '#6B7280',
-        },
-        {
             id: 'logout',
             title: 'Logout',
             icon: 'log-out-outline',
@@ -98,25 +88,24 @@ const ProfileScreen = () => {
         },
     ];
 
+    if (!user) return null;
+
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Header Background */}
                 <View style={styles.headerBackground} />
 
-                {/* Profile Info Section */}
                 <View style={styles.profileSection}>
                     <Animated.View
                         entering={FadeInDown.delay(200).springify()}
                         style={styles.imageContainer}
                     >
                         <Image
-                            source={{ uri: user.profileImage }}
+                            source={user.profile_image || 'https://ui-avatars.com/api/?name=' + user.number}
                             style={styles.profileImage}
                             contentFit="cover"
-                            transition={1000}
                         />
-                        {user.isOnline && (
+                        {user.is_online === 1 && (
                             <View style={styles.onlineBadge}>
                                 <View style={styles.onlineDot} />
                             </View>
@@ -127,26 +116,22 @@ const ProfileScreen = () => {
                         entering={FadeInDown.delay(300).springify()}
                         style={styles.infoContainer}
                     >
-                        <Text style={styles.name}>{user.name}</Text>
-                        <View style={styles.statusRow}>
-                            <View style={[styles.statusDot, { backgroundColor: user.isOnline ? '#22C55E' : '#94A3B8' }]} />
-                            <Text style={styles.statusText}>{user.isOnline ? 'Active Now' : 'Offline'}</Text>
-                        </View>
+                        <Text style={styles.name}>{user.number}</Text>
+                        <Text style={styles.statusText}>{user.is_online === 1 ? 'Active Now' : 'Offline'}</Text>
                     </Animated.View>
                 </View>
 
-                {/* Details Card */}
                 <Animated.View
                     entering={FadeInDown.delay(400).springify()}
                     style={styles.detailsCard}
                 >
                     <View style={styles.detailItem}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="mail-outline" size={20} color="#6366F1" />
+                            <Ionicons name="call-outline" size={20} color="#6366F1" />
                         </View>
                         <View>
-                            <Text style={styles.detailLabel}>Email</Text>
-                            <Text style={styles.detailValue}>{user.email}</Text>
+                            <Text style={styles.detailLabel}>Mobile Number</Text>
+                            <Text style={styles.detailValue}>{user.number}</Text>
                         </View>
                     </View>
 
@@ -154,16 +139,15 @@ const ProfileScreen = () => {
 
                     <View style={styles.detailItem}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="call-outline" size={20} color="#6366F1" />
+                            <Ionicons name="mail-outline" size={20} color="#6366F1" />
                         </View>
                         <View>
-                            <Text style={styles.detailLabel}>Phone Number</Text>
-                            <Text style={styles.detailValue}>{user.mobile}</Text>
+                            <Text style={styles.detailLabel}>Email</Text>
+                            <Text style={styles.detailValue}>{user.email || 'Not set'}</Text>
                         </View>
                     </View>
                 </Animated.View>
 
-                {/* Menu Section */}
                 <View style={styles.menuSection}>
                     <Text style={styles.sectionTitle}>Account</Text>
                     {menuItems.map((item, index) => (
@@ -254,21 +238,11 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#111827',
     },
-    statusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    statusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginRight: 6,
-    },
     statusText: {
         fontSize: 14,
         color: '#6B7280',
         fontWeight: '500',
+        marginTop: 4,
     },
     detailsCard: {
         backgroundColor: '#FFFFFF',

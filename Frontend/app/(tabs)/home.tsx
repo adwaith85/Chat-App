@@ -1,26 +1,92 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, ScrollView, TextInput, FlatList } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  StatusBar,
+  ScrollView,
+  FlatList,
+  ActivityIndicator,
+  RefreshControl
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link, useFocusEffect } from "expo-router";
+import { Link, useFocusEffect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from 'expo-image';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { chatApi } from "../../api";
 
 export default function Home() {
   const [userName, setUserName] = useState('');
+  const [recentChats, setRecentChats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        setUserName(parsed.number || 'Explorer');
+      }
+
+      const response = await chatApi.getRecentChats();
+      setRecentChats(response.data);
+    } catch (error) {
+      console.error('Error loading home data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
-      const loadUser = async () => {
-        const userData = await AsyncStorage.getItem('user');
-        if (userData) {
-          const parsed = JSON.parse(userData);
-          setUserName(parsed.name.split(' ')[0]); // Get first name
-        }
-      };
-      loadUser();
+      loadData();
     }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const renderChatItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.chatCard}
+      onPress={() => router.push({
+        pathname: "/chat/[id]",
+        params: { id: item.user_id, name: item.number, image: item.profile_image }
+      })}
+    >
+      <View style={styles.avatarContainer}>
+        <Image
+          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + item.number}
+          style={styles.chatAvatar}
+        />
+        {item.is_online === 1 && <View style={styles.onlineBadge} />}
+      </View>
+
+      <View style={styles.chatInfo}>
+        <View style={styles.chatHeader}>
+          <Text style={styles.chatName} numberOfLines={1}>{item.number}</Text>
+          <Text style={styles.chatTime}>
+            {item.last_message_time ? new Date(item.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+          </Text>
+        </View>
+        <View style={styles.chatFooter}>
+          <Text style={styles.lastMessage} numberOfLines={1}>
+            {item.last_message || 'No messages yet'}
+          </Text>
+          {item.unread_count > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{item.unread_count}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -31,39 +97,56 @@ export default function Home() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greetingText}>Hello, {userName || 'Explorer'}</Text>
-          <Text style={styles.userNameText}>Talkies</Text>
+          <Text style={styles.appNameText}>Talkies</Text>
         </View>
-        <Ionicons name="search-outline" size={26} color="#1e293b" />
+        <TouchableOpacity style={styles.searchBtn}>
+          <Ionicons name="search-outline" size={26} color="#1e293b" />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-        {/* Empty State */}
-        <View style={styles.emptyContainer}>
-          <View style={styles.illustrationWrap}>
-            <View style={styles.circle1} />
-            <View style={styles.circle2} />
-            <Ionicons name="chatbubbles-outline" size={80} color="#e2e8f0" />
-          </View>
-          <Text style={styles.emptyTitle}>Your inbox is empty</Text>
-          <Text style={styles.emptySubtitle}>
-            Connect with someone new and start a conversation.
-          </Text>
-
-          <Link href="/chats" asChild>
-            <TouchableOpacity style={styles.inlineActionBtn}>
-              <Text style={styles.inlineActionText}>Find Match</Text>
-            </TouchableOpacity>
-          </Link>
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
         </View>
-      </ScrollView>
+      ) : (
+        <FlatList
+          data={recentChats}
+          renderItem={renderChatItem}
+          keyExtractor={(item) => item.user_id.toString()}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <View style={styles.illustrationWrap}>
+                <View style={styles.circle1} />
+                <View style={styles.circle2} />
+                <Ionicons name="chatbubbles-outline" size={80} color="#e2e8f0" />
+              </View>
+              <Text style={styles.emptyTitle}>No Conversations Yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Start a new chat with someone and keep the conversation going!
+              </Text>
+              <TouchableOpacity
+                style={styles.primaryActionBtn}
+                onPress={() => router.push('/chats')}
+              >
+                <Text style={styles.primaryActionText}>Start Chatting</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      )}
 
       {/* Floating Action Button */}
-      <Link href="/chats" asChild>
-        <TouchableOpacity style={styles.fab}>
-          <Ionicons name="chatbubble-ellipses" size={28} color="#fff" />
-        </TouchableOpacity>
-      </Link>
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => router.push('/chats')}
+      >
+        <Ionicons name="chatbubble-ellipses" size={28} color="#fff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -79,134 +162,112 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  headerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#F1F5F9',
   },
   greetingText: {
     fontSize: 14,
     color: "#64748b",
     fontWeight: "500",
   },
-  userNameText: {
-    fontSize: 24,
-    fontWeight: "800",
+  appNameText: {
+    fontSize: 28,
+    fontWeight: "900",
     color: "#1e293b",
-    letterSpacing: -0.5,
+    letterSpacing: -1,
   },
-  profileIcon: {
-    padding: 2,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  storiesContainer: {
-    paddingVertical: 12,
-  },
-  storiesScroll: {
-    paddingHorizontal: 24,
-  },
-  storyItem: {
+  searchBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
-    marginRight: 20,
+    justifyContent: 'center',
   },
-  storyImageBorder: {
-    padding: 3,
-    borderRadius: 36,
-    borderWidth: 2.5,
-    borderColor: '#6366f1',
-    marginBottom: 8,
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  storyImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+    paddingTop: 10,
   },
-  onlineIndicator: {
+  chatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  chatAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 22,
+    backgroundColor: '#F1F5F9',
+  },
+  onlineBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#22C55E',
-    borderWidth: 3,
+    borderWidth: 2.5,
     borderColor: '#FFFFFF',
   },
-  addStoryBtn: {
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  addStoryOutline: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  addStoryIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storyName: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  searchSection: {
-    paddingHorizontal: 24,
-    marginTop: 12,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
-  },
-  searchInput: {
+  chatInfo: {
     flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: "#1e293b",
+    marginLeft: 16,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    marginTop: 32,
-    marginBottom: 16,
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1e293b",
-    letterSpacing: -0.5,
+  chatName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1e293b',
+    flex: 1,
   },
-  seeAllText: {
+  chatTime: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  chatFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastMessage: {
     fontSize: 14,
-    color: "#6366f1",
-    fontWeight: "700",
+    color: '#64748b',
+    flex: 1,
+    marginRight: 8,
+  },
+  unreadBadge: {
+    backgroundColor: '#6366f1',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 20,
+    paddingTop: 60,
     paddingHorizontal: 40,
   },
   illustrationWrap: {
@@ -238,6 +299,7 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     marginBottom: 10,
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 16,
@@ -246,7 +308,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 30,
   },
-  inlineActionBtn: {
+  primaryActionBtn: {
     backgroundColor: "#6366f1",
     paddingVertical: 14,
     paddingHorizontal: 40,
@@ -257,7 +319,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
-  inlineActionText: {
+  primaryActionText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
@@ -266,9 +328,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 30,
     right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 22,
     backgroundColor: "#6366f1",
     alignItems: "center",
     justifyContent: "center",

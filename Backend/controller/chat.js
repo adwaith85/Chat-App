@@ -3,7 +3,7 @@ import pool from '../db.js';
 // Send Message
 export const sendMessage = async (req, res) => {
     const { receiver_id, message, message_type } = req.body;
-    const sender_id = req.user.id;
+    const sender_id = req.user.user_id;
 
     if (!receiver_id || (!message && message_type === 'text')) {
         return res.status(400).json({ message: 'Receiver ID and message are required' });
@@ -35,7 +35,7 @@ export const sendMessage = async (req, res) => {
 // Get Messages between two users
 export const getMessages = async (req, res) => {
     const { partner_id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user.user_id;
 
     try {
         const [messages] = await pool.execute(
@@ -104,7 +104,7 @@ export const deleteMessage = async (req, res) => {
 
 // Get Recent Chats (List of users chatted with)
 export const getRecentChats = async (req, res) => {
-    const userId = req.user.id;
+    const userId = req.user.user_id;
 
     try {
         // This query finds the latest message for each contact the user has interacted with

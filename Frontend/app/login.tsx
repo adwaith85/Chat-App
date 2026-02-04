@@ -18,33 +18,27 @@ import { authApi } from '../api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function LoginScreen() {
-    const [contact, setContact] = useState('');
+    const [number, setNumber] = useState('');
     const [otp, setOtp] = useState('');
-    const [step, setStep] = useState(1); // 1: Contact, 2: OTP
+    const [step, setStep] = useState(1); // 1: Number, 2: OTP
     const [loading, setLoading] = useState(false);
-    const [channel, setChannel] = useState<'email' | 'mobile'>('email');
 
     const handleRequestOTP = async () => {
-        if (!contact) {
-            Alert.alert('Error', 'Please enter your contact information');
+        if (!number) {
+            Alert.alert('Error', 'Please enter your phone number');
             return;
         }
 
         setLoading(true);
         try {
-            console.log('Sending OTP request to:', channel, contact);
-            const response = await authApi.requestOTP(channel, contact);
+            console.log('Sending OTP request to:', number);
+            const response = await authApi.requestOTP(number);
             Alert.alert('OTP Sent', `For testing purposes, your OTP is: ${response.data.otp}`);
             setStep(2);
         } catch (error: any) {
             console.error('Login Error:', error);
-            if (error.response) {
-                console.error('Error Data:', error.response.data);
-                console.error('Error Status:', error.response.status);
-            } else if (error.request) {
-                console.error('No response received from server. Check if your machine IP is correct.');
-            }
-            Alert.alert('Network Error', 'Could not connect to the server. Please ensure the backend is running and the IP address in api/index.ts is correct.');
+            
+            Alert.alert('Error', error.response?.data?.message || 'Could not connect to the server.');
         } finally {
             setLoading(false);
         }
@@ -58,7 +52,7 @@ export default function LoginScreen() {
 
         setLoading(true);
         try {
-            const response = await authApi.verifyOTP(channel, contact, otp);
+            const response = await authApi.verifyOTP(number, otp);
             const { token, user } = response.data;
 
             await AsyncStorage.setItem('token', token);
@@ -85,44 +79,25 @@ export default function LoginScreen() {
 
                 <View style={styles.content}>
                     <Animated.View entering={FadeInDown.delay(200).springify()}>
-                        <Text style={styles.title}>{step === 1 ? 'Welcome Back!' : 'Verify OTP'}</Text>
+                        <Text style={styles.title}>{step === 1 ? 'Welcome to Talkies' : 'Verify OTP'}</Text>
                         <Text style={styles.subtitle}>
                             {step === 1
-                                ? 'Enter your details to continue your journey.'
-                                : `Enter the code we sent to your ${channel}.`}
+                                ? 'Join thousands of people chatting around the world.'
+                                : `Enter the 6-digit code sent to ${number}.`}
                         </Text>
                     </Animated.View>
 
                     {step === 1 && (
                         <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.inputSection}>
-                            <View style={styles.tabContainer}>
-                                <TouchableOpacity
-                                    style={[styles.tab, channel === 'email' && styles.activeTab]}
-                                    onPress={() => setChannel('email')}
-                                >
-                                    <Text style={[styles.tabText, channel === 'email' && styles.activeTabText]}>Email</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.tab, channel === 'mobile' && styles.activeTab]}
-                                    onPress={() => setChannel('mobile')}
-                                >
-                                    <Text style={[styles.tabText, channel === 'mobile' && styles.activeTabText]}>Mobile</Text>
-                                </TouchableOpacity>
-                            </View>
-
                             <View style={styles.inputContainer}>
-                                <Ionicons
-                                    name={channel === 'email' ? "mail-outline" : "call-outline"}
-                                    size={20}
-                                    color="#64748b"
-                                />
+                                <Ionicons name="call-outline" size={20} color="#64748b" />
                                 <TextInput
-                                    placeholder={channel === 'email' ? "Enter your email" : "Enter your mobile number"}
+                                    placeholder="Enter your phone number"
                                     placeholderTextColor="#94a3b8"
                                     style={styles.input}
-                                    value={contact}
-                                    onChangeText={setContact}
-                                    keyboardType={channel === 'email' ? 'email-address' : 'phone-pad'}
+                                    value={number}
+                                    onChangeText={setNumber}
+                                    keyboardType="phone-pad"
                                     autoCapitalize="none"
                                 />
                             </View>
@@ -134,11 +109,13 @@ export default function LoginScreen() {
                             >
                                 {loading ? <ActivityIndicator color="#fff" /> : (
                                     <>
-                                        <Text style={styles.primaryBtnText}>Send OTP</Text>
+                                        <Text style={styles.primaryBtnText}>Get OTP</Text>
                                         <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
                                     </>
                                 )}
                             </TouchableOpacity>
+
+                            <Text style={styles.infoText}>We'll send you a 6-digit verification code.</Text>
                         </Animated.View>
                     )}
 
@@ -164,7 +141,7 @@ export default function LoginScreen() {
                             >
                                 {loading ? <ActivityIndicator color="#fff" /> : (
                                     <>
-                                        <Text style={styles.primaryBtnText}>Verify & Login</Text>
+                                        <Text style={styles.primaryBtnText}>Verify & Continue</Text>
                                         <Ionicons name="checkmark-circle-outline" size={20} color="#fff" style={{ marginLeft: 8 }} />
                                     </>
                                 )}
@@ -219,77 +196,56 @@ const styles = StyleSheet.create({
     inputSection: {
         marginTop: 40,
     },
-    tabContainer: {
-        flexDirection: 'row',
-        backgroundColor: '#F1F5F9',
-        borderRadius: 12,
-        padding: 4,
-        marginBottom: 24,
-    },
-    tab: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 8,
-    },
-    activeTab: {
-        backgroundColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    tabText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#64748b',
-    },
-    activeTabText: {
-        color: '#6366f1',
-    },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        borderRadius: 16,
+        borderRadius: 20,
         paddingHorizontal: 16,
-        height: 60,
-        marginBottom: 24,
+        height: 64,
+        marginBottom: 20,
     },
     input: {
         flex: 1,
         marginLeft: 12,
-        fontSize: 16,
+        fontSize: 18,
         color: '#1e293b',
+        fontWeight: '500',
     },
     primaryBtn: {
         backgroundColor: '#6366f1',
-        height: 60,
-        borderRadius: 16,
+        height: 64,
+        borderRadius: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#6366f1',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 15,
+        elevation: 6,
+        marginTop: 10,
     },
     primaryBtnText: {
         color: '#fff',
         fontSize: 18,
         fontWeight: '700',
     },
-    resendBtn: {
+    infoText: {
+        textAlign: 'center',
+        color: '#94a3b8',
+        fontSize: 13,
         marginTop: 20,
+    },
+    resendBtn: {
+        marginTop: 24,
         alignItems: 'center',
     },
     resendText: {
-        color: '#64748b',
-        fontSize: 14,
-        fontWeight: '600',
+        color: '#6366f1',
+        fontSize: 15,
+        fontWeight: '700',
     },
 });

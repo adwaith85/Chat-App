@@ -3,35 +3,101 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Replace with your local machine's IP address for physical device testing
 // For simulator, http://localhost:3000 or http://10.0.2.2:3000 (android) works
-const BASE_URL = 'http://192.168.33.90/api'; // Updated with local IP for connectivity
+const BASE_URL = 'http://172.18.112.1:3000'; // Make sure this matches your backend IP and port
 
 const api = axios.create({
     baseURL: BASE_URL,
+    timeout: 15000,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
 // Add interceptor to add token to requests
-api.interceptors.request.use(async (config) => {
-    const token = await AsyncStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(
+    async (config) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (token && config.headers) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+        } catch (error) {
+            console.error('Error fetching token from storage:', error);
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
     }
-    return config;
-});
+);
 
+// Add interceptor to handle response errors
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 401) {
+            // Optional: Handle unauthorized access (e.g., clear token and redirect to login)
+            // await AsyncStorage.removeItem('token');
+        }
+        return Promise.reject(error);
+    }
+);
+
+/**
+ * Authentication related API calls
+ */
 export const authApi = {
-    requestOTP: (channel: string, contact: string) =>
-        api.post('/user/request-otp', { channel, contact }),
+    requestOTP: (number: string) =>
+        api.post('/user/request-otp', { number }),
 
-    verifyOTP: (channel: string, contact: string, otp: string) =>
-        api.post('/user/verify-otp', { channel, contact, otp }),
+    verifyOTP: (number: string, otp: string) =>
+        api.post('/user/verify-otp', { number, otp }),
 
-    getMe: () => api.get('/user/me'),
+    logout: () =>
+        api.post('/user/logout'),
+};
 
-    updateProfile: (data: { name?: string, email?: string, mobile?: string }) =>
+/**
+ * User and Profile related API calls
+ */
+export const userApi = {
+    getMe: () =>
+        api.get('/user/me'),
+
+    getUsers: () =>
+        api.get('/users'),
+
+    getUserById: (id: string | number) =>
+        api.get(`/user/${id}`),
+
+    updateProfile: (data: { email?: string, profile_image?: string }) =>
         api.put('/user/update', data),
+
+    deleteAccount: (id: string | number) =>
+        api.delete(`/user/${id}`),
+};
+
+/**
+ * Chat and Messaging related API calls
+ */
+export const chatApi = {
+    sendMessage: (data: { receiver_id: number, message: string, message_type?: string }) =>
+        api.post('/api/chat/send', data),
+
+    getMessages: (partner_id: number | string) =>
+        api.get(`/api/chat/messages/${partner_id}`),
+
+    getRecentChats: () =>
+        api.get('/api/chat/recent'),
+
+    getMessageById: (id: number | string) =>
+        api.get(`/api/chat/message/${id}`),
+
+    updateMessageStatus: (id: number | string, status: 'delivered' | 'read') =>
+        api.put(`/api/chat/message/${id}`, { status }),
+
+    deleteMessage: (id: number | string) =>
+        api.delete(`/api/chat/message/${id}`),
 };
 
 export default api;

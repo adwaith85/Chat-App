@@ -16,12 +16,15 @@ const PORT = process.env.PORT || 3000;
 initSocket(server);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin:"*",
+  credentials:true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api', userRouter);
+app.use("/", userRouter);
 app.use('/api', chatRouter);
 
 // Default route

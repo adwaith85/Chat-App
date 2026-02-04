@@ -16,15 +16,14 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi } from '../../api';
+import { userApi } from '../../api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const ProfileEditScreen = () => {
     const [formData, setFormData] = useState({
-        name: '',
         email: '',
-        mobile: '',
-        profileImage: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200',
+        profile_image: '',
+        number: '',
     });
     const [loading, setLoading] = useState(false);
 
@@ -33,30 +32,32 @@ const ProfileEditScreen = () => {
             const userData = await AsyncStorage.getItem('user');
             if (userData) {
                 const parsed = JSON.parse(userData);
-                setFormData(prev => ({
-                    ...prev,
-                    name: parsed.name || '',
+                setFormData({
                     email: parsed.email || '',
-                    mobile: parsed.mobile || '',
-                }));
+                    profile_image: parsed.profile_image || '',
+                    number: parsed.number || '',
+                });
             }
         };
         loadUserData();
     }, []);
 
     const handleSave = async () => {
-        if (!formData.name) {
-            Alert.alert('Error', 'Name is required');
-            return;
-        }
-
         setLoading(true);
         try {
-            await authApi.updateProfile({
-                name: formData.name,
+            await userApi.updateProfile({
                 email: formData.email,
-                mobile: formData.mobile,
+                profile_image: formData.profile_image,
             });
+
+            // Update local storage
+            const userData = await AsyncStorage.getItem('user');
+            if (userData) {
+                const parsed = JSON.parse(userData);
+                const updated = { ...parsed, ...formData };
+                await AsyncStorage.setItem('user', JSON.stringify(updated));
+            }
+
             Alert.alert('Success', 'Profile updated successfully');
             router.back();
         } catch (error: any) {
@@ -67,17 +68,18 @@ const ProfileEditScreen = () => {
         }
     };
 
-    const InputField = ({ label, value, onChangeText, icon, keyboardType = 'default' }: any) => (
+    const InputField = ({ label, value, onChangeText, icon, keyboardType = 'default', editable = true }: any) => (
         <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>{label}</Text>
-            <View style={styles.inputWrapper}>
-                <Ionicons name={icon} size={20} color="#6366F1" style={styles.inputIcon} />
+            <View style={[styles.inputWrapper, !editable && styles.disabledInput]}>
+                <Ionicons name={icon} size={20} color={editable ? "#6366F1" : "#94A3B8"} style={styles.inputIcon} />
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, !editable && { color: '#94A3B8' }]}
                     value={value}
                     onChangeText={onChangeText}
                     keyboardType={keyboardType}
                     placeholderTextColor="#9CA3AF"
+                    editable={editable}
                 />
             </View>
         </View>
@@ -108,14 +110,14 @@ const ProfileEditScreen = () => {
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                    {/* Change Avatar Section */}
+                    {/* Profile Image Section */}
                     <Animated.View
                         entering={FadeInDown.delay(100).springify()}
                         style={styles.avatarSection}
                     >
                         <View style={styles.avatarWrapper}>
                             <Image
-                                source={{ uri: formData.profileImage }}
+                                source={formData.profile_image || 'https://ui-avatars.com/api/?name=' + formData.number}
                                 style={styles.avatar}
                                 contentFit="cover"
                             />
@@ -123,17 +125,22 @@ const ProfileEditScreen = () => {
                                 <Ionicons name="camera" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
-                        <Text style={styles.changeAvatarText}>Change Profile Picture</Text>
+                        <TextInput
+                            style={styles.imageUrlInput}
+                            placeholder="Paste Profile Image URL"
+                            value={formData.profile_image}
+                            onChangeText={(text) => setFormData({ ...formData, profile_image: text })}
+                        />
                     </Animated.View>
 
                     {/* Form Section */}
                     <View style={styles.formSection}>
                         <Animated.View entering={FadeInDown.delay(200).springify()}>
                             <InputField
-                                label="Full Name"
-                                value={formData.name}
-                                onChangeText={(text: string) => setFormData({ ...formData, name: text })}
-                                icon="person-outline"
+                                label="Phone Number (Verified)"
+                                value={formData.number}
+                                icon="call-outline"
+                                editable={false}
                             />
                         </Animated.View>
 
@@ -146,26 +153,15 @@ const ProfileEditScreen = () => {
                                 keyboardType="email-address"
                             />
                         </Animated.View>
-
-                        <Animated.View entering={FadeInDown.delay(400).springify()}>
-                            <InputField
-                                label="Phone Number"
-                                value={formData.mobile}
-                                onChangeText={(text: string) => setFormData({ ...formData, mobile: text })}
-                                icon="call-outline"
-                                keyboardType="phone-pad"
-                            />
-                        </Animated.View>
                     </View>
 
-                    {/* Info Box */}
                     <Animated.View
-                        entering={FadeInDown.delay(500).springify()}
+                        entering={FadeInDown.delay(400).springify()}
                         style={styles.infoBox}
                     >
-                        <Ionicons name="information-circle-outline" size={20} color="#4B5563" />
+                        <Ionicons name="information-circle-outline" size={20} color="#6366F1" />
                         <Text style={styles.infoBoxText}>
-                            Your email and phone number are used for authentication and connecting you with others.
+                            Your phone number is verified and cannot be changed. You can update your email and profile picture.
                         </Text>
                     </Animated.View>
                 </ScrollView>
@@ -191,19 +187,19 @@ const styles = StyleSheet.create({
     backButton: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: 14,
         backgroundColor: '#F3F4F6',
         alignItems: 'center',
         justifyContent: 'center',
     },
     headerTitle: {
         fontSize: 18,
-        fontWeight: '700',
+        fontWeight: '800',
         color: '#111827',
     },
     saveText: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         color: '#4F46E5',
     },
     scrollContent: {
@@ -215,80 +211,93 @@ const styles = StyleSheet.create({
     },
     avatarWrapper: {
         position: 'relative',
+        marginBottom: 15,
     },
     avatar: {
         width: 120,
         height: 120,
-        borderRadius: 60,
+        borderRadius: 44,
         borderWidth: 4,
-        borderColor: '#EEF2FF',
+        borderColor: '#F3F4F6',
     },
     editBadge: {
         position: 'absolute',
-        bottom: 5,
-        right: 5,
+        bottom: -5,
+        right: -5,
         backgroundColor: '#4F46E5',
         width: 36,
         height: 36,
-        borderRadius: 18,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 3,
         borderColor: '#FFFFFF',
     },
-    changeAvatarText: {
-        marginTop: 12,
-        fontSize: 14,
-        color: '#4F46E5',
-        fontWeight: '600',
+    imageUrlInput: {
+        width: '80%',
+        height: 40,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        fontSize: 12,
+        color: '#6B7280',
+        textAlign: 'center',
     },
     formSection: {
         paddingHorizontal: 20,
-        marginTop: 40,
+        marginTop: 30,
     },
     inputContainer: {
         marginBottom: 20,
     },
     inputLabel: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 13,
+        fontWeight: '700',
         color: '#374151',
         marginBottom: 8,
         marginLeft: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F9FAFB',
-        borderRadius: 12,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
         paddingHorizontal: 15,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderWidth: 1.5,
+        borderColor: '#F3F4F6',
+        height: 56,
+    },
+    disabledInput: {
+        backgroundColor: '#F9FAFB',
+        borderColor: '#F3F4F6',
     },
     inputIcon: {
         marginRight: 12,
     },
     input: {
         flex: 1,
-        height: 50,
         fontSize: 16,
         color: '#111827',
+        fontWeight: '500',
     },
     infoBox: {
         flexDirection: 'row',
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#EEF2FF',
         marginHorizontal: 20,
-        marginTop: 20,
-        padding: 15,
-        borderRadius: 12,
+        marginTop: 10,
+        padding: 16,
+        borderRadius: 16,
         alignItems: 'center',
     },
     infoBoxText: {
         flex: 1,
         fontSize: 13,
-        color: '#4B5563',
-        marginLeft: 10,
+        color: '#4F46E5',
+        marginLeft: 12,
         lineHeight: 18,
+        fontWeight: '500',
     },
 });
 
