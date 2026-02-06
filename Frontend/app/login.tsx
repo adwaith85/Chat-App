@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi, userApi } from '../api';
+import { ToastNotification } from '../components/ToastNotification';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function LoginScreen() {
@@ -23,6 +24,10 @@ export default function LoginScreen() {
     const [otp, setOtp] = useState('');
     const [step, setStep] = useState(1); // 1: Number, 2: OTP
     const [loading, setLoading] = useState(false);
+
+    // Toast state
+    const [toastVisible, setToastVisible] = useState(false);
+    const [toastMessage, setToastMessage] = useState('');
 
     const handleRequestOTP = async () => {
         if (!number || !name.trim()) {
@@ -34,7 +39,11 @@ export default function LoginScreen() {
         try {
             console.log('Sending OTP request to:', number);
             const response = await authApi.requestOTP(number);
-            Alert.alert('OTP Sent', `For testing purposes, your OTP is: ${response.data.otp}`);
+
+            // Show custom toast instead of alert, simulating a message
+            setToastMessage(`Your verification code is: ${response.data.otp}`);
+            setToastVisible(true);
+
             setStep(2);
         } catch (error: any) {
             console.error('Login Error:', error);
@@ -55,6 +64,9 @@ export default function LoginScreen() {
         try {
             const response = await authApi.verifyOTP(number, otp);
             const { token, user } = response.data;
+
+            // Hide the OTP toast on success
+            setToastVisible(false);
 
             await AsyncStorage.setItem('token', token);
             await AsyncStorage.setItem('user', JSON.stringify(user));
@@ -83,6 +95,11 @@ export default function LoginScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <ToastNotification
+                visible={toastVisible}
+                message={toastMessage}
+                onDismiss={() => setToastVisible(false)}
+            />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
