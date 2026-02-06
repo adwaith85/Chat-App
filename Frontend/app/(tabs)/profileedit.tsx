@@ -11,6 +11,8 @@ import {
     Alert,
     ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { BASE_URL } from '../../constants/Config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,9 +24,11 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 const ProfileEditScreen = () => {
     const [formData, setFormData] = useState({
         email: '',
-        profile_image: '',
+        profile_image: null as any, // File object or uri string from picker
         number: '',
+        name: '',
     });
+    const [displayImage, setDisplayImage] = useState(''); // For showing current/selected image
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -34,27 +38,61 @@ const ProfileEditScreen = () => {
                 const parsed = JSON.parse(userData);
                 setFormData({
                     email: parsed.email || '',
-                    profile_image: parsed.profile_image || '',
+                    profile_image: null,
                     number: parsed.number || '',
+                    name: parsed.name || '',
                 });
+                setDisplayImage(parsed.profile_image || '');
             }
         };
         loadUserData();
     }, []);
 
+    const pickImage = async () => {
+        // No permissions request is necessary for launching the image library
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+
+        if (!result.canceled) {
+            setFormData({ ...formData, profile_image: result.assets[0] });
+            setDisplayImage(result.assets[0].uri);
+        }
+    };
+
     const handleSave = async () => {
         setLoading(true);
         try {
-            await userApi.updateProfile({
-                email: formData.email,
-                profile_image: formData.profile_image,
-            });
+            const data = new FormData();
+            data.append('email', formData.email);
+            data.append('name', formData.name);
 
-            // Update local storage
+            if (formData.profile_image) {
+                // If it's a new file selected from picker
+                const uriParts = formData.profile_image.uri.split('.');
+                const fileType = uriParts[uriParts.length - 1];
+
+                data.append('profile_image', {
+                    uri: formData.profile_image.uri,
+                    name: `profile.${fileType}`,
+                    type: `image/${fileType}`,
+                } as any);
+            } else {
+                // Keep existing image logic if you want, but backend update skips undefined fields
+                // If user wants to KEEP existing image, we don't send anything.
+            }
+
+            const response = await userApi.updateProfile(data);
+
+            // Update local storage with response from server
             const userData = await AsyncStorage.getItem('user');
-            if (userData) {
+            if (userData && response.data.user) {
                 const parsed = JSON.parse(userData);
-                const updated = { ...parsed, ...formData };
+                // Merge existing with new updates
+                const updated = { ...parsed, ...response.data.user };
                 await AsyncStorage.setItem('user', JSON.stringify(updated));
             }
 
@@ -117,25 +155,33 @@ const ProfileEditScreen = () => {
                     >
                         <View style={styles.avatarWrapper}>
                             <Image
-                                source={formData.profile_image || 'https://ui-avatars.com/api/?name=' + formData.number}
+                                source={
+                                    displayImage ?
+                                        (displayImage.startsWith('http') || displayImage.startsWith('file') ? displayImage : `${BASE_URL}/${displayImage}`)
+                                        : 'https://ui-avatars.com/api/?name=' + formData.name
+                                }
                                 style={styles.avatar}
                                 contentFit="cover"
                             />
-                            <TouchableOpacity style={styles.editBadge}>
+                            <TouchableOpacity style={styles.editBadge} onPress={pickImage}>
                                 <Ionicons name="camera" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
-                        <TextInput
-                            style={styles.imageUrlInput}
-                            placeholder="Paste Profile Image URL"
-                            value={formData.profile_image}
-                            onChangeText={(text) => setFormData({ ...formData, profile_image: text })}
-                        />
+                        <Text style={styles.changePhotoText}>Tap icon to change photo</Text>
                     </Animated.View>
 
                     {/* Form Section */}
                     <View style={styles.formSection}>
                         <Animated.View entering={FadeInDown.delay(200).springify()}>
+                            <InputField
+                                label="Full Name"
+                                value={formData.name}
+                                onChangeText={(text: string) => setFormData({ ...formData, name: text })}
+                                icon="person-outline"
+                            />
+                        </Animated.View>
+
+                        <Animated.View entering={FadeInDown.delay(300).springify()}>
                             <InputField
                                 label="Phone Number (Verified)"
                                 value={formData.number}
@@ -144,7 +190,7 @@ const ProfileEditScreen = () => {
                             />
                         </Animated.View>
 
-                        <Animated.View entering={FadeInDown.delay(300).springify()}>
+                        <Animated.View entering={FadeInDown.delay(400).springify()}>
                             <InputField
                                 label="Email Address"
                                 value={formData.email}
@@ -156,12 +202,12 @@ const ProfileEditScreen = () => {
                     </View>
 
                     <Animated.View
-                        entering={FadeInDown.delay(400).springify()}
+                        entering={FadeInDown.delay(500).springify()}
                         style={styles.infoBox}
                     >
                         <Ionicons name="information-circle-outline" size={20} color="#6366F1" />
                         <Text style={styles.infoBoxText}>
-                            Your phone number is verified and cannot be changed. You can update your email and profile picture.
+                            Your phone number is verified and cannot be changed. You can update your name, email and profile picture.
                         </Text>
                     </Animated.View>
                 </ScrollView>
@@ -298,6 +344,11 @@ const styles = StyleSheet.create({
         marginLeft: 10,
         lineHeight: 16,
         fontWeight: '500',
+    },
+    changePhotoText: {
+        fontSize: 12,
+        color: '#6B7280',
+        marginTop: 12,
     },
 });
 

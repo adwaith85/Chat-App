@@ -10,6 +10,7 @@ import {
     Logout
 } from '../controller/user.js';
 import { verifyToken } from '../middleware/auth.js';
+import { upload } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ router.post('/user/logout', verifyToken, Logout);
 
 // User Profile routes
 router.get('/user/me', verifyToken, getMe);
-router.put('/user/update', verifyToken, updateUser);
+router.put('/user/update', verifyToken, upload.single('profile_image'), updateUser);
 
 // Admin/General User Management (You might want to restrict these)
 router.get('/users', verifyToken, getUsers);

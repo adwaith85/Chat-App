@@ -67,8 +67,10 @@ export const userApi = {
     getUserById: (id: string | number) =>
         api.get(`/user/${id}`),
 
-    updateProfile: (data: { email?: string, profile_image?: string }) =>
-        api.put('/user/update', data),
+    updateProfile: (data: FormData | any) =>
+        api.put('/user/update', data, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }),
 
     deleteAccount: (id: string | number) =>
         api.delete(`/user/${id}`),

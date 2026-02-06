@@ -14,18 +14,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi } from '../api';
+import { authApi, userApi } from '../api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function LoginScreen() {
+    const [name, setName] = useState('');
     const [number, setNumber] = useState('');
     const [otp, setOtp] = useState('');
     const [step, setStep] = useState(1); // 1: Number, 2: OTP
     const [loading, setLoading] = useState(false);
 
     const handleRequestOTP = async () => {
-        if (!number) {
-            Alert.alert('Error', 'Please enter your phone number');
+        if (!number || !name.trim()) {
+            Alert.alert('Error', 'Please enter your name and phone number');
             return;
         }
 
@@ -57,6 +58,19 @@ export default function LoginScreen() {
 
             await AsyncStorage.setItem('token', token);
             await AsyncStorage.setItem('user', JSON.stringify(user));
+
+            if (name && !user.name) {
+                try {
+                    const formData = new FormData();
+                    formData.append('name', name);
+                    await userApi.updateProfile(formData);
+
+                    const updatedUser = { ...user, name };
+                    await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+                } catch (err) {
+                    console.log("Failed to update name:", err);
+                }
+            }
 
             router.replace('/(tabs)/home');
         } catch (error: any) {
@@ -100,6 +114,18 @@ export default function LoginScreen() {
 
                     {step === 1 && (
                         <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.inputSection}>
+                            <View style={styles.inputContainer}>
+                                <Ionicons name="person-outline" size={20} color="#64748b" />
+                                <TextInput
+                                    placeholder="Enter your name"
+                                    placeholderTextColor="#94a3b8"
+                                    style={styles.input}
+                                    value={name}
+                                    onChangeText={setName}
+                                    autoCapitalize="words"
+                                />
+                            </View>
+
                             <View style={styles.inputContainer}>
                                 <Ionicons name="call-outline" size={20} color="#64748b" />
                                 <TextInput

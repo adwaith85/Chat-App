@@ -31,7 +31,7 @@ export default function Home() {
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
         const parsed = JSON.parse(userData);
-        setUserName(parsed.number || 'Explorer');
+        setUserName(parsed.name || 'Explorer');
       }
 
       const response = await chatApi.getRecentChats();
@@ -84,12 +84,12 @@ export default function Home() {
       style={styles.chatCard}
       onPress={() => router.push({
         pathname: "/chat/[id]",
-        params: { id: item.user_id, name: item.number, image: item.profile_image }
+        params: { id: item.user_id, name: item.name, image: item.profile_image }
       })}
     >
       <View style={styles.avatarContainer}>
         <Image
-          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + item.number}
+          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + item.name}
           style={styles.chatAvatar}
         />
         {item.is_online === 1 && <View style={styles.onlineBadge} />}

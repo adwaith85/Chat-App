@@ -103,6 +103,7 @@ export const verifyOTP = async (req, res) => {
             user: {
                 user_id: user.user_id,
                 number: user.number,
+                name: user.name,
                 is_verified: 1,
                 email: user.email,
                 profile_image: user.profile_image
@@ -121,7 +122,7 @@ export const getMe = async (req, res) => {
         const user_id = req.user.user_id; // From verifyToken middleware
 
         const [users] = await pool.query(
-            `SELECT user_id, number, email, profile_image, is_online, last_seen, created_at 
+            `SELECT user_id, number, name, email, profile_image, is_online, last_seen, created_at 
        FROM users WHERE user_id = ?`,
             [user_id]
         );
@@ -167,6 +168,7 @@ export const getUsers = async (req, res) => {
             `SELECT 
         user_id,
         number,
+        name,
         email,
         profile_image,
         is_online,
@@ -196,6 +198,7 @@ export const getUserById = async (req, res) => {
             `SELECT 
         user_id,
         number,
+        name,
         email,
         profile_image,
         is_online,
@@ -225,22 +228,61 @@ export const getUserById = async (req, res) => {
 export const updateUser = async (req, res) => {
     try {
         const user_id = req.user.user_id; // Usually we update the logged in user's profile
-        const { email, profile_image } = req.body;
+        let { name, email } = req.body;
 
-        const [result] = await pool.query(
-            `UPDATE users 
-       SET email = ?, profile_image = ?
-       WHERE user_id = ?`,
-            [email, profile_image, user_id]
-        );
+        let profile_image = req.body.profile_image;
+
+        // If a file was uploaded, use the generated path
+        if (req.file) {
+            // Assuming your server is hosted at http://<IP>:3000
+            // You might want to save just the relative path or the full URL
+            // Here saving the relative path for flexibility
+            profile_image = `uploads/${req.file.filename}`;
+        }
+
+        // Build the update query dynamically based on what's provided
+        let fields = [];
+        let values = [];
+
+        if (name !== undefined) {
+            fields.push('name = ?');
+            values.push(name);
+        }
+
+        if (email !== undefined) {
+            fields.push('email = ?');
+            values.push(email);
+        }
+
+        if (profile_image !== undefined) {
+            fields.push('profile_image = ?');
+            values.push(profile_image);
+        }
+
+        if (fields.length === 0) {
+            return res.status(400).json({ message: "No fields to update" });
+        }
+
+        values.push(user_id);
+
+        const sql = `UPDATE users SET ${fields.join(', ')} WHERE user_id = ?`;
+
+        const [result] = await pool.query(sql, values);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: "User not found" });
         }
 
+        // Fetch updated user to return
+        const [updatedUser] = await pool.query(
+            "SELECT user_id, number, name, email, profile_image FROM users WHERE user_id = ?",
+            [user_id]
+        );
+
         res.status(200).json({
             success: true,
-            message: "User updated successfully"
+            message: "User updated successfully",
+            user: updatedUser[0]
         });
 
     } catch (error) {

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userApi, authApi } from '../../api';
+import { BASE_URL } from '../../constants/Config';
 import Animated, {
     FadeInDown,
     FadeInRight,
@@ -102,7 +103,11 @@ const ProfileScreen = () => {
                         style={styles.imageContainer}
                     >
                         <Image
-                            source={user.profile_image || 'https://ui-avatars.com/api/?name=' + user.number}
+                            source={
+                                user.profile_image
+                                    ? (user.profile_image.startsWith('http') ? user.profile_image : `${BASE_URL}/${user.profile_image}`)
+                                    : 'https://ui-avatars.com/api/?name=' + user.number
+                            }
                             style={styles.profileImage}
                             contentFit="cover"
                         />
@@ -117,7 +122,7 @@ const ProfileScreen = () => {
                         entering={FadeInDown.delay(300).springify()}
                         style={styles.infoContainer}
                     >
-                        <Text style={styles.name}>{user.number}</Text>
+                        <Text style={styles.name}>{user.name || user.number}</Text>
                         <Text style={styles.statusText}>{user.is_online === 1 ? 'Active Now' : 'Offline'}</Text>
                     </Animated.View>
                 </View>

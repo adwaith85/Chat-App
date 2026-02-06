@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -17,11 +18,17 @@ initSocket(server);
 
 // Middleware
 app.use(cors({
-  origin:"*",
-  credentials:true
+  origin: "*",
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+
+app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.use("/", userRouter);
