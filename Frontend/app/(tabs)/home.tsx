@@ -8,7 +8,8 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useFocusEffect, router } from "expo-router";
@@ -16,12 +17,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from 'expo-image';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { chatApi } from "../../api";
+import { useSocket } from "../../hooks/useSocket";
 
 export default function Home() {
   const [userName, setUserName] = useState('');
   const [recentChats, setRecentChats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { socket } = useSocket();
 
   const loadData = async () => {
     try {
@@ -40,6 +43,30 @@ export default function Home() {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    if (socket) {
+      const handleNewMessage = () => {
+        loadData();
+      };
+
+      const handleUserStatus = (data: any) => {
+        setRecentChats(prev => prev.map(chat =>
+          chat.user_id === data.user_id ? { ...chat, is_online: data.is_online } : chat
+        ));
+      };
+
+      socket.on('receive_message', handleNewMessage);
+      socket.on('message_sent', handleNewMessage);
+      socket.on('user_status', handleUserStatus);
+
+      return () => {
+        socket.off('receive_message', handleNewMessage);
+        socket.off('message_sent', handleNewMessage);
+        socket.off('user_status', handleUserStatus);
+      };
+    }
+  }, [socket]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -157,27 +184,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   greetingText: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#64748b",
     fontWeight: "500",
   },
   appNameText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "900",
     color: "#1e293b",
-    letterSpacing: -1,
+    letterSpacing: -0.8,
   },
   searchBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
@@ -188,14 +215,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 80,
+    paddingTop: 5,
   },
   chatCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -203,40 +230,40 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   chatAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 18,
     backgroundColor: '#F1F5F9',
   },
   onlineBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#22C55E',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   chatInfo: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 14,
   },
   chatHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   chatName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1e293b',
     flex: 1,
   },
   chatTime: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#94a3b8',
   },
   chatFooter: {
@@ -245,99 +272,117 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lastMessage: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
     flex: 1,
     marginRight: 8,
   },
   unreadBadge: {
     backgroundColor: '#6366f1',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
   },
   unreadText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 60,
-    paddingHorizontal: 40,
+    paddingTop: 40,
+    paddingHorizontal: 30,
   },
   illustrationWrap: {
-    width: 180,
-    height: 180,
+    width: 140,
+    height: 140,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 20,
+    marginBottom: 15,
   },
   circle1: {
     position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: "#EEF2FF",
     opacity: 0.6,
   },
   circle2: {
     position: "absolute",
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: "#E0E7FF",
     opacity: 0.7,
   },
   emptyTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "800",
     color: "#1e293b",
-    marginBottom: 10,
-    letterSpacing: -0.5,
+    marginBottom: 8,
+    letterSpacing: -0.4,
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#64748b",
     textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 30,
+    lineHeight: 20,
+    marginBottom: 24,
   },
   primaryActionBtn: {
     backgroundColor: "#6366f1",
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 16,
-    shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#6366f1",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+      web: {
+        boxShadow: "0px 4px 8px rgba(99, 102, 241, 0.2)",
+      }
+    }),
   },
   primaryActionText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
   },
   fab: {
     position: "absolute",
-    bottom: 30,
-    right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 22,
+    bottom: 24,
+    right: 20,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     backgroundColor: "#6366f1",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#6366f1",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#6366f1",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+      web: {
+        boxShadow: "0px 6px 10px rgba(99, 102, 241, 0.25)",
+      }
+    }),
   },
 });

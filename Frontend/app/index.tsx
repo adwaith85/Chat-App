@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
-  ImageBackground
+  ImageBackground,
+  Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -191,11 +192,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#4F46E5",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#4F46E5",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 8,
+      },
+      web: {
+        boxShadow: "0px 10px 20px rgba(79, 70, 229, 0.25)",
+      }
+    }),
   },
   primaryBtnText: {
     color: "#FFFFFF",

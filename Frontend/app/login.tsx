@@ -37,7 +37,7 @@ export default function LoginScreen() {
             setStep(2);
         } catch (error: any) {
             console.error('Login Error:', error);
-            
+
             Alert.alert('Error', error.response?.data?.message || 'Could not connect to the server.');
         } finally {
             setLoading(false);
@@ -73,7 +73,18 @@ export default function LoginScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <TouchableOpacity style={styles.backBtn} onPress={() => step === 2 ? setStep(1) : router.back()}>
+                <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => {
+                        if (step === 2) {
+                            setStep(1);
+                        } else if (router.canGoBack()) {
+                            router.back();
+                        } else {
+                            router.replace('/');
+                        }
+                    }}
+                >
                     <Ionicons name="arrow-back" size={24} color="#1e293b" />
                 </TouchableOpacity>
 
@@ -167,34 +178,34 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     backBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 24,
-        marginTop: 12,
+        marginLeft: 20,
+        marginTop: 10,
     },
     content: {
         flex: 1,
-        paddingHorizontal: 24,
-        paddingTop: 40,
+        paddingHorizontal: 20,
+        paddingTop: 30,
     },
     title: {
-        fontSize: 32,
+        fontSize: 26,
         fontWeight: '800',
         color: '#1e293b',
-        letterSpacing: -1,
+        letterSpacing: -0.8,
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#64748b',
-        marginTop: 8,
-        lineHeight: 24,
+        marginTop: 6,
+        lineHeight: 20,
     },
     inputSection: {
-        marginTop: 40,
+        marginTop: 30,
     },
     inputContainer: {
         flexDirection: 'row',
@@ -202,50 +213,59 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        height: 64,
-        marginBottom: 20,
+        borderRadius: 16,
+        paddingHorizontal: 14,
+        height: 52,
+        marginBottom: 16,
     },
     input: {
         flex: 1,
-        marginLeft: 12,
-        fontSize: 18,
+        marginLeft: 10,
+        fontSize: 16,
         color: '#1e293b',
         fontWeight: '500',
     },
     primaryBtn: {
         backgroundColor: '#6366f1',
-        height: 64,
-        borderRadius: 20,
+        height: 52,
+        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#6366f1',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 15,
-        elevation: 6,
-        marginTop: 10,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#6366f1',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 10,
+            },
+            android: {
+                elevation: 4,
+            },
+            web: {
+                boxShadow: '0px 4px 10px rgba(99, 102, 241, 0.2)',
+            }
+        }),
+        marginTop: 8,
     },
     primaryBtnText: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
     },
     infoText: {
         textAlign: 'center',
         color: '#94a3b8',
-        fontSize: 13,
-        marginTop: 20,
+        fontSize: 12,
+        marginTop: 16,
     },
     resendBtn: {
-        marginTop: 24,
+        marginTop: 20,
         alignItems: 'center',
     },
     resendText: {
         color: '#6366f1',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
     },
 });

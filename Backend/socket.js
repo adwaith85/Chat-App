@@ -2,15 +2,16 @@ import { Server } from 'socket.io';
 import pool from './db.js';
 import jwt from 'jsonwebtoken';
 
+let io;
+const userSockets = new Map(); // user_id -> socket_id
+
 export const initSocket = (server) => {
-    const io = new Server(server, {
+    io = new Server(server, {
         cors: {
             origin: "*",
             methods: ["GET", "POST"]
         }
     });
-
-    const userSockets = new Map(); // user_id -> socket_id
 
     io.on('connection', (socket) => {
         let currentUserId = null;
@@ -18,7 +19,7 @@ export const initSocket = (server) => {
         socket.on('authenticate', async (token) => {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                currentUserId = decoded.id;
+                currentUserId = decoded.user_id;
 
                 userSockets.set(currentUserId, socket.id);
                 console.log(`User ${currentUserId} authenticated`);
@@ -100,4 +101,15 @@ export const initSocket = (server) => {
     });
 
     return io;
+};
+
+export const getIO = () => {
+    if (!io) {
+        throw new Error('Socket.io not initialized');
+    }
+    return io;
+};
+
+export const getUserSocket = (userId) => {
+    return userSockets.get(Number(userId));
 };

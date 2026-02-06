@@ -10,15 +10,11 @@ export default function TabLayout() {
                 tabBarInactiveTintColor: "#94a3b8",
                 tabBarStyle: {
                     backgroundColor: '#FFFFFF',
-                    borderTopWidth: 0,
-                    height: 70,
-                    paddingBottom: 12,
-                    paddingTop: 8,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: -4 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 10,
-                    elevation: 10,
+                    borderTopWidth: 1,
+                    borderTopColor: '#F1F5F9',
+                    height: 55,
+                    paddingBottom: 6,
+                    paddingTop: 6,
                 }
             }}
         >
@@ -50,7 +46,7 @@ export default function TabLayout() {
                 }}
             />
             <Tabs.Screen
-                name="profile-edit"
+                name="profileedit"
                 options={{
                     href: null,
                     tabBarIcon: ({ color, size }) => (

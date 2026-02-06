@@ -1,4 +1,5 @@
 import pool from '../db.js';
+import { getIO, getUserSocket } from '../socket.js';
 
 // Send Message
 export const sendMessage = async (req, res) => {
@@ -24,6 +25,17 @@ export const sendMessage = async (req, res) => {
             status: 'sent',
             sent_at: new Date()
         };
+
+        // Emit socket event for real-time delivery
+        try {
+            const io = getIO();
+            const receiverSocketId = getUserSocket(receiver_id);
+            if (receiverSocketId) {
+                io.to(receiverSocketId).emit('receive_message', newMessage);
+            }
+        } catch (socketError) {
+            console.error('Socket emission failed in sendMessage:', socketError.message);
+        }
 
         res.status(201).json(newMessage);
     } catch (error) {

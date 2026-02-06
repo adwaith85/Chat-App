@@ -17,9 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { chatApi, userApi } from '../../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { io, Socket } from 'socket.io-client';
-
-const SOCKET_URL = 'http://192.168.20.3:3000'; // Match your backend IP
+import { useSocket } from '../../hooks/useSocket';
+import { Alert } from 'react-native';
 
 export default function ChatScreen() {
     const { id, name, image } = useLocalSearchParams();
@@ -28,7 +27,7 @@ export default function ChatScreen() {
     const [loading, setLoading] = useState(true);
     const [myId, setMyId] = useState<number | null>(null);
     const [isOnline, setIsOnline] = useState(false);
-    const socket = useRef<Socket | null>(null);
+    const { socket } = useSocket();
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
@@ -37,40 +36,49 @@ export default function ChatScreen() {
             if (userData) {
                 const user = JSON.parse(userData);
                 setMyId(user.user_id);
-                setupSocket(await AsyncStorage.getItem('token'));
             }
             fetchMessages();
         };
 
-        const setupSocket = (token: string | null) => {
-            if (!token) return;
-            socket.current = io(SOCKET_URL);
+        const handleReceiveMessage = (message: any) => {
+            if (message.sender_id === Number(id)) {
+                setMessages(prev => [...prev, message]);
+                chatApi.updateMessageStatus(message.message_id, 'read');
+            }
+        };
 
-            socket.current.on('connect', () => {
-                socket.current?.emit('authenticate', token);
-            });
-
-            socket.current.on('receive_message', (message: any) => {
-                if (message.sender_id === Number(id)) {
-                    setMessages(prev => [...prev, message]);
-                    // Mark as read
-                    chatApi.updateMessageStatus(message.message_id, 'read');
-                }
-            });
-
-            socket.current.on('user_status', (data: any) => {
-                if (data.user_id === Number(id)) {
-                    setIsOnline(data.is_online === 1);
-                }
+        const handleMessageSent = (message: any) => {
+            setMessages(prev => {
+                const exists = prev.some(m => m.message_id === message.message_id);
+                if (exists) return prev;
+                return prev.map(m =>
+                    (m.status === 'sending' && m.message === message.message) ? message : m
+                );
             });
         };
+
+        const handleUserStatus = (data: any) => {
+            if (data.user_id === Number(id)) {
+                setIsOnline(data.is_online === 1);
+            }
+        };
+
+        if (socket) {
+            socket.on('receive_message', handleReceiveMessage);
+            socket.on('message_sent', handleMessageSent);
+            socket.on('user_status', handleUserStatus);
+        }
 
         init();
 
         return () => {
-            socket.current?.disconnect();
+            if (socket) {
+                socket.off('receive_message', handleReceiveMessage);
+                socket.off('message_sent', handleMessageSent);
+                socket.off('user_status', handleUserStatus);
+            }
         };
-    }, [id]);
+    }, [id, socket]);
 
     const fetchMessages = async () => {
         try {
@@ -88,7 +96,7 @@ export default function ChatScreen() {
     };
 
     const handleSend = async () => {
-        if (!input.trim() || !myId) return;
+        if (!input.trim() || !myId || !socket) return;
 
         const messageData = {
             receiver_id: Number(id),
@@ -97,15 +105,25 @@ export default function ChatScreen() {
         };
 
         try {
-            const response = await chatApi.sendMessage(messageData);
-            const newMessage = response.data;
-            setMessages(prev => [...prev, newMessage]);
+            // Optimistic update
+            const tempId = Date.now();
+            const optimisticMessage = {
+                message_id: tempId,
+                sender_id: myId,
+                receiver_id: Number(id),
+                message: input.trim(),
+                message_type: 'text',
+                status: 'sending',
+                sent_at: new Date()
+            };
+            setMessages(prev => [...prev, optimisticMessage]);
             setInput('');
 
-            // Send via socket for real-time (not strictly necessary if receiver also listens)
-            socket.current?.emit('send_message', messageData);
+            // Send via socket
+            socket.emit('send_message', messageData);
         } catch (error) {
             console.error('Error sending message:', error);
+            Alert.alert('Error', 'Failed to send message');
         }
     };
 
@@ -217,8 +235,8 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         backgroundColor: '#fff',
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
@@ -230,24 +248,24 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        marginLeft: 12,
+        marginLeft: 8,
     },
     avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: '#F1F5F9',
     },
     userTextInfo: {
-        marginLeft: 12,
+        marginLeft: 10,
     },
     userName: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '700',
         color: '#1e293b',
     },
     statusText: {
-        fontSize: 12,
+        fontSize: 10,
         color: '#64748b',
     },
     onlineText: {
@@ -258,11 +276,11 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     messagesList: {
-        padding: 16,
-        paddingBottom: 24,
+        padding: 12,
+        paddingBottom: 20,
     },
     messageWrapper: {
-        marginBottom: 12,
+        marginBottom: 8,
         flexDirection: 'row',
     },
     myMessageWrapper: {
@@ -272,10 +290,10 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-start',
     },
     messageBubble: {
-        maxWidth: '80%',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
+        maxWidth: '85%',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 16,
     },
     myBubble: {
         backgroundColor: '#6366f1',
@@ -288,8 +306,8 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
     },
     messageText: {
-        fontSize: 15,
-        lineHeight: 22,
+        fontSize: 14,
+        lineHeight: 18,
     },
     myMessageText: {
         color: '#fff',
@@ -298,8 +316,8 @@ const styles = StyleSheet.create({
         color: '#1e293b',
     },
     timeText: {
-        fontSize: 10,
-        marginTop: 4,
+        fontSize: 9,
+        marginTop: 2,
         alignSelf: 'flex-end',
     },
     myTimeText: {
@@ -311,39 +329,48 @@ const styles = StyleSheet.create({
     inputArea: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 12,
+        padding: 8,
         backgroundColor: '#fff',
         borderTopWidth: 1,
         borderTopColor: '#E2E8F0',
     },
     attachBtn: {
-        padding: 8,
+        padding: 6,
     },
     inputContainer: {
         flex: 1,
         backgroundColor: '#F1F5F9',
-        borderRadius: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        marginHorizontal: 8,
-        maxHeight: 100,
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        marginHorizontal: 4,
+        maxHeight: 80,
     },
     input: {
-        fontSize: 15,
+        fontSize: 14,
         color: '#1e293b',
     },
     sendBtn: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         backgroundColor: '#6366f1',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#6366f1',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
-        elevation: 3,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#6366f1',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+            },
+            android: {
+                elevation: 2,
+            },
+            web: {
+                boxShadow: '0px 2px 4px rgba(99, 102, 241, 0.15)',
+            }
+        }),
     },
     sendBtnDisabled: {
         backgroundColor: '#E2E8F0',
