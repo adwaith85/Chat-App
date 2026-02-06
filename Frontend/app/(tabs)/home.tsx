@@ -84,12 +84,12 @@ export default function Home() {
       style={styles.chatCard}
       onPress={() => router.push({
         pathname: "/chat/[id]",
-        params: { id: item.user_id, name: item.name, image: item.profile_image }
+        params: { id: item.user_id, name: item.name || item.number, image: item.profile_image }
       })}
     >
       <View style={styles.avatarContainer}>
         <Image
-          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + item.name}
+          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + (item.name || item.number)}
           style={styles.chatAvatar}
         />
         {item.is_online === 1 && <View style={styles.onlineBadge} />}
@@ -97,7 +97,7 @@ export default function Home() {
 
       <View style={styles.chatInfo}>
         <View style={styles.chatHeader}>
-          <Text style={styles.chatName} numberOfLines={1}>{item.number}</Text>
+          <Text style={styles.chatName} numberOfLines={1}>{item.name || item.number}</Text>
           <Text style={styles.chatTime}>
             {item.last_message_time ? new Date(item.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
           </Text>

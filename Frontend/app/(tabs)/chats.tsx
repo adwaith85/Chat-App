@@ -62,19 +62,19 @@ export default function ChatsScreen() {
       style={styles.userCard}
       onPress={() => router.push({
         pathname: "/chat/[id]",
-        params: { id: item.user_id, name: item.name, image: item.profile_image }
+        params: { id: item.user_id, name: item.name || item.number, image: item.profile_image }
       })}
     >
       <View style={styles.avatarContainer}>
         <Image
-          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + item.number}
+          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + (item.name || item.number)}
           style={styles.avatar}
         />
         {item.is_online === 1 && <View style={styles.onlineBadge} />}
       </View>
 
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name}</Text>
+        <Text style={styles.userName}>{item.name || item.number}</Text>
         <Text style={styles.userStatus}>
           {item.is_online === 1 ? 'Available' : 'Seen ' + (item.last_seen ? new Date(item.last_seen).toLocaleDateString() : 'recently')}
         </Text>
