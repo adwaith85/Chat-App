@@ -156,9 +156,11 @@ const ProfileEditScreen = () => {
                         <View style={styles.avatarWrapper}>
                             <Image
                                 source={
-                                    displayImage ?
-                                        (displayImage.startsWith('http') || displayImage.startsWith('file') ? displayImage : `${BASE_URL}/${displayImage}`)
-                                        : 'https://ui-avatars.com/api/?name=' + formData.name
+                                    displayImage
+                                        ? (displayImage.startsWith('http') || displayImage.startsWith('file')
+                                            ? displayImage
+                                            : `${BASE_URL.replace(/\/$/, '')}/${displayImage.replace(/^\//, '')}`)
+                                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name || 'User')}&background=random`
                                 }
                                 style={styles.avatar}
                                 contentFit="cover"

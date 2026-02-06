@@ -123,7 +123,8 @@ export const getRecentChats = async (req, res) => {
         const [chats] = await pool.execute(
             `SELECT 
                 u.user_id, 
-                u.number, 
+                u.number,
+                u.name, 
                 u.email, 
                 u.profile_image, 
                 u.is_online,
