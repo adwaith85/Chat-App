@@ -18,7 +18,7 @@ export default function NotFoundScreen() {
       {/* Action */}
       <TouchableOpacity
         style={styles.button}
-        onPress={() => router.back()}
+        onPress={() => router.replace('/')}
       >
         <Text style={styles.buttonText}>Go Back</Text>
       </TouchableOpacity>

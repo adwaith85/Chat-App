@@ -20,6 +20,7 @@ import Animated, {
     FadeInDown,
     FadeInRight,
 } from 'react-native-reanimated';
+import { disconnectSocket } from '../../hooks/useSocket';
 
 const { width } = Dimensions.get('window');
 
@@ -53,13 +54,21 @@ const ProfileScreen = () => {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        await authApi.logout();
+                        // 1. Clear local storage first for immediate UI response
+                        await AsyncStorage.multiRemove(['token', 'user']);
+
+                        // 2. Disconnect socket
+                        disconnectSocket();
+
+                        // 3. Redirect immediately
+                        router.replace('/');
+
+                        // 4. Try to notify server in background (fire and forget)
+                        authApi.logout().catch(err => console.log('Server logout error:', err));
                     } catch (error) {
                         console.error('Logout error:', error);
+                        router.replace('/');
                     }
-                    await AsyncStorage.removeItem('token');
-                    await AsyncStorage.removeItem('user');
-                    router.replace('/');
                 }
             }
         ]);

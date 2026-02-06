@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 
 import { SOCKET_URL } from '../constants/Config';
 
@@ -35,9 +36,15 @@ export const useSocket = () => {
 
             socketInstance.on('connect', handleConnect);
 
-            socketInstance.on('disconnect', () => {
+            socketInstance.on('disconnect', async () => {
                 console.log('Socket disconnected');
                 setIsConnected(false);
+
+                // Check if disconnection was unexpected (token still exists)
+                const token = await AsyncStorage.getItem('token');
+                if (token) {
+                    router.replace('/+not-found');
+                }
             });
 
             socketInstance.on('connect_error', (err) => {
@@ -60,3 +67,10 @@ export const useSocket = () => {
 };
 
 export const getSocket = () => socketInstance;
+
+export const disconnectSocket = () => {
+    if (socketInstance) {
+        socketInstance.disconnect();
+        socketInstance = null;
+    }
+};
