@@ -10,16 +10,18 @@ const api = axios.create({
     },
 });
 
+import { useAuthStore } from '../hooks/useAuthStore';
+
 // Add interceptor to add token to requests
 api.interceptors.request.use(
     async (config) => {
         try {
-            const token = await AsyncStorage.getItem('token');
+            const token = useAuthStore.getState().token || await AsyncStorage.getItem('token');
             if (token && config.headers) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
         } catch (error) {
-            console.error('Error fetching token from storage:', error);
+            console.error('Error fetching token for request:', error);
         }
         return config;
     },
@@ -33,11 +35,8 @@ api.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response?.status === 401) {
-            await AsyncStorage.removeItem('token');
-            await AsyncStorage.removeItem('user');
-            // Hard redirect to login/landing
-            // Note: In React Native, we can't easily trigger a navigation from here 
-            // without a reference to the router, but the _layout.tsx checkAuth will catch this.
+            await useAuthStore.getState().clearAuth();
+            // RootLayout effect will handle navigation
         }
         return Promise.reject(error);
     }
@@ -47,11 +46,11 @@ api.interceptors.response.use(
  * Authentication related API calls
  */
 export const authApi = {
-    requestOTP: (number: string) =>
-        api.post('/user/request-otp', { number }),
+    requestOTP: (email: string, name?: string) =>
+        api.post('/user/request-otp', { email, name }),
 
-    verifyOTP: (number: string, otp: string) =>
-        api.post('/user/verify-otp', { number, otp }),
+    verifyOTP: (email: string, otp: string) =>
+        api.post('/user/verify-otp', { email, otp }),
 
     logout: () =>
         api.post('/user/logout'),

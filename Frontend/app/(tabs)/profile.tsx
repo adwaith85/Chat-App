@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userApi, authApi } from '../../api';
 import { BASE_URL } from '../../constants/Config';
 import Animated, {
@@ -21,22 +20,23 @@ import Animated, {
     FadeInRight,
 } from 'react-native-reanimated';
 import { disconnectSocket } from '../../hooks/useSocket';
+import { useAuthStore } from '../../hooks/useAuthStore';
 
 const { width } = Dimensions.get('window');
 
 const ProfileScreen = () => {
-    const [user, setUser] = useState<any>(null);
+    const { user, clearAuth, setAuth, token } = useAuthStore();
 
     const fetchUserData = async () => {
         try {
             const response = await userApi.getMe();
             const userData = response.data.user;
-            setUser(userData);
-            await AsyncStorage.setItem('user', JSON.stringify(userData));
+            // Update store with fresh data from server
+            if (token && userData) {
+                await setAuth(token, userData);
+            }
         } catch (error) {
             console.error('Error fetching user data:', error);
-            const localUser = await AsyncStorage.getItem('user');
-            if (localUser) setUser(JSON.parse(localUser));
         }
     };
 
@@ -47,52 +47,66 @@ const ProfileScreen = () => {
     );
 
     const handleLogout = async () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        // 1. Clear local storage first for immediate UI response
-                        await AsyncStorage.multiRemove(['token', 'user']);
+        Alert.alert(
+            'Confirm Logout',
+            'Are you sure you want to log out?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            // 1. Notify server FIRST while we still have the token
+                            try {
+                                await authApi.logout();
+                            } catch (e) {
+                                console.log('Server logout failed (likely token already expired)');
+                            }
 
-                        // 2. Disconnect socket
-                        disconnectSocket();
+                            // 2. Disconnect socket
+                            disconnectSocket();
 
-                        // 3. Redirect immediately
-                        router.replace('/');
+                            // 3. Clear store and storage
+                            await clearAuth();
 
-                        // 4. Try to notify server in background (fire and forget)
-                        authApi.logout().catch(err => console.log('Server logout error:', err));
-                    } catch (error) {
-                        console.error('Logout error:', error);
-                        router.replace('/');
-                    }
-                }
-            }
-        ]);
+                            // 4. Redirect to landing
+                            router.replace('/');
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                            // Emergency clear and redirect
+                            await clearAuth();
+                            router.replace('/');
+                        }
+                    },
+                },
+            ],
+            { cancelable: true }
+        );
     };
 
     const menuItems = [
         {
             id: 'edit',
             title: 'Edit Profile',
-            icon: 'person-outline',
+            icon: 'person-outline' as const,
             onPress: () => router.push('/profileedit'),
             color: '#4F46E5',
         },
         {
             id: 'settings',
             title: 'Settings',
-            icon: 'settings-outline',
+            icon: 'settings-outline' as const,
             onPress: () => { },
             color: '#6B7280',
         },
         {
             id: 'logout',
             title: 'Logout',
-            icon: 'log-out-outline',
+            icon: 'log-out-outline' as const,
             onPress: handleLogout,
             color: '#EF4444',
             isDestructive: true,
@@ -114,13 +128,15 @@ const ProfileScreen = () => {
                         <Image
                             source={
                                 user.profile_image
-                                    ? (user.profile_image.startsWith('http') ? user.profile_image : `${BASE_URL}/${user.profile_image}`)
-                                    : 'https://ui-avatars.com/api/?name=' + user.number
+                                    ? (user.profile_image.startsWith('http') || user.profile_image.startsWith('file')
+                                        ? user.profile_image
+                                        : `${BASE_URL.replace(/\/$/, '')}/${user.profile_image.replace(/^\//, '')}`)
+                                    : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name || user.email)
                             }
                             style={styles.profileImage}
                             contentFit="cover"
                         />
-                        {user.is_online === 1 && (
+                        {user.is_online === 'online' && (
                             <View style={styles.onlineBadge}>
                                 <View style={styles.onlineDot} />
                             </View>
@@ -131,8 +147,8 @@ const ProfileScreen = () => {
                         entering={FadeInDown.delay(300).springify()}
                         style={styles.infoContainer}
                     >
-                        <Text style={styles.name}>{user.name || user.number}</Text>
-                        <Text style={styles.statusText}>{user.is_online === 1 ? 'Active Now' : 'Offline'}</Text>
+                        <Text style={styles.name}>{user.name || user.email}</Text>
+                        <Text style={styles.statusText}>{user.is_online === 'online' ? 'Active Now' : 'Offline'}</Text>
                     </Animated.View>
                 </View>
 

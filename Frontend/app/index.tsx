@@ -17,21 +17,10 @@ import Animated, {
   FadeInDown,
   FadeInUp
 } from "react-native-reanimated";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get("window");
 
-export default function LandingScreen() {
-
-  useEffect(() => {
-    const checkToken = async () => {
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        router.replace('/(tabs)/home');
-      }
-    };
-    checkToken();
-  }, []);
+export default function index() {
 
   return (
     <SafeAreaView style={styles.container}>

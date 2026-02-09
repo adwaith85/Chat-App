@@ -1,44 +1,43 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuthStore } from "../hooks/useAuthStore";
 
 export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
+  const { isAuthenticated, isInitialized, initialize } = useAuthStore();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = await AsyncStorage.getItem('token');
+    initialize();
+  }, []);
 
-      // Public routes are the landing page (segments[0] is undefined), login, and not-found
-      const isPublicRoute = segments[0] === undefined || segments[0] === 'login' || segments[0] === '+not-found';
+  useEffect(() => {
+    if (!isInitialized) return;
 
-      if (!token && !isPublicRoute) {
-        // Redirect to landing if no token and hits a protected route
-        router.replace('/');
-      } else if (token && (segments[0] === undefined || segments[0] === 'login')) {
-        // Redirect to home if logged in and hits landing or login
-        router.replace('/(tabs)/home');
-      }
-    };
+    // segments[0] can be undefined (index), 'login', '+not-found', '(tabs)', 'chat'
+    const segment = segments[0] as string | undefined;
+    const isPublicRoute = segment === undefined || segment === 'login' || segment === '+not-found';
 
-    checkAuth();
-  }, [segments, segments[0]]);
+    if (!isAuthenticated && !isPublicRoute) {
+      // Redirect to landing if no token and hits a protected route
+      router.replace('/');
+    } else if (isAuthenticated && (segment === undefined || segment === 'login')) {
+      // If logged in and at landing or login, jump straight to home
+      router.replace('/(tabs)/home');
+    }
+  }, [isAuthenticated, isInitialized, segments]);
+
+  if (!isInitialized) {
+    return null; // Don't show anything until we know the auth status
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index"
-        options={{
-          title: "index",
-
-        }} />
+      <Stack.Screen name="index" options={{ title: "index" }} />
       <Stack.Screen name="(tabs)" />
-      {/* <Stack.Screen
-        name="profileedit"
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom'
-        }}
-      /> */}
+      <Stack.Screen name="chat" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="+not-found" options={{ title: "Not Found" }} />
     </Stack>
   );
 }

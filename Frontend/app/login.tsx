@@ -13,16 +13,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from '../hooks/useAuthStore';
 import { authApi, userApi } from '../api';
 import { ToastNotification } from '../components/ToastNotification';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function LoginScreen() {
     const [name, setName] = useState('');
-    const [number, setNumber] = useState('');
+    const [email, setEmail] = useState('');
     const [otp, setOtp] = useState('');
-    const [step, setStep] = useState(1); // 1: Number, 2: OTP
+    const [step, setStep] = useState(1); // 1: Email, 2: OTP
     const [loading, setLoading] = useState(false);
 
     // Toast state
@@ -30,18 +30,18 @@ export default function LoginScreen() {
     const [toastMessage, setToastMessage] = useState('');
 
     const handleRequestOTP = async () => {
-        if (!number || !name.trim()) {
-            Alert.alert('Error', 'Please enter your name and phone number');
+        if (!email || !name.trim()) {
+            Alert.alert('Error', 'Please enter your name and email address');
             return;
         }
 
         setLoading(true);
         try {
-            console.log('Sending OTP request to:', number);
-            const response = await authApi.requestOTP(number);
+            console.log('Sending OTP request to:', email);
+            await authApi.requestOTP(email, name);
 
             // Show custom toast instead of alert, simulating a message
-            setToastMessage(`Your verification code is: ${response.data.otp}`);
+            setToastMessage(`A verification code has been sent to ${email}`);
             setToastVisible(true);
 
             setStep(2);
@@ -54,6 +54,8 @@ export default function LoginScreen() {
         }
     };
 
+    const { setAuth } = useAuthStore();
+
     const handleVerifyOTP = async () => {
         if (!otp) {
             Alert.alert('Error', 'Please enter the OTP');
@@ -62,26 +64,33 @@ export default function LoginScreen() {
 
         setLoading(true);
         try {
-            const response = await authApi.verifyOTP(number, otp);
+            const response = await authApi.verifyOTP(email, otp);
             const { token, user } = response.data;
 
             // Hide the OTP toast on success
             setToastVisible(false);
 
-            await AsyncStorage.setItem('token', token);
-            await AsyncStorage.setItem('user', JSON.stringify(user));
-
             if (name && !user.name) {
                 try {
+                    // Temporarily set it so the name update can use the token from store
+                    // or we can just pass the name in the update
                     const formData = new FormData();
                     formData.append('name', name);
-                    await userApi.updateProfile(formData);
 
+                    // We need to set the token manually in API header if interceptors haven't run yet
+                    // but setAuth will handle storage. 
+                    // Let's just update the store FIRST.
+                    await setAuth(token, user);
+
+                    await userApi.updateProfile(formData);
                     const updatedUser = { ...user, name };
-                    await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+                    await setAuth(token, updatedUser);
                 } catch (err) {
                     console.log("Failed to update name:", err);
+                    await setAuth(token, user);
                 }
+            } else {
+                await setAuth(token, user);
             }
 
             router.replace('/(tabs)/home');
@@ -121,11 +130,11 @@ export default function LoginScreen() {
 
                 <View style={styles.content}>
                     <Animated.View entering={FadeInDown.delay(200).springify()}>
-                        <Text style={styles.title}>{step === 1 ? 'Welcome to Talkies' : 'Verify OTP'}</Text>
+                        <Text style={styles.title}>{step === 1 ? 'Welcome to Talkies' : 'Verify Email'}</Text>
                         <Text style={styles.subtitle}>
                             {step === 1
                                 ? 'Join thousands of people chatting around the world.'
-                                : `Enter the 6-digit code sent to ${number}.`}
+                                : `Enter the 6-digit code sent to ${email}.`}
                         </Text>
                     </Animated.View>
 
@@ -144,14 +153,14 @@ export default function LoginScreen() {
                             </View>
 
                             <View style={styles.inputContainer}>
-                                <Ionicons name="call-outline" size={20} color="#64748b" />
+                                <Ionicons name="mail-outline" size={20} color="#64748b" />
                                 <TextInput
-                                    placeholder="Enter your phone number"
+                                    placeholder="Enter your email address"
                                     placeholderTextColor="#94a3b8"
                                     style={styles.input}
-                                    value={number}
-                                    onChangeText={setNumber}
-                                    keyboardType="phone-pad"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
                                     autoCapitalize="none"
                                 />
                             </View>

@@ -16,8 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { chatApi, userApi } from '../../api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSocket } from '../../hooks/useSocket';
+import { useAuthStore } from '../../hooks/useAuthStore';
+import { BASE_URL } from '../../constants/Config';
 import { Alert } from 'react-native';
 
 export default function ChatScreen() {
@@ -25,18 +26,14 @@ export default function ChatScreen() {
     const [messages, setMessages] = useState<any[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(true);
-    const [myId, setMyId] = useState<number | null>(null);
+    const { user } = useAuthStore();
+    const myId = user?.user_id;
     const [isOnline, setIsOnline] = useState(false);
     const { socket } = useSocket();
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
         const init = async () => {
-            const userData = await AsyncStorage.getItem('user');
-            if (userData) {
-                const user = JSON.parse(userData);
-                setMyId(user.user_id);
-            }
             fetchMessages();
         };
 
@@ -59,7 +56,7 @@ export default function ChatScreen() {
 
         const handleUserStatus = (data: any) => {
             if (data.user_id === Number(id)) {
-                setIsOnline(data.is_online === 1);
+                setIsOnline(data.is_online === 'online');
             }
         };
 
@@ -87,7 +84,7 @@ export default function ChatScreen() {
 
             // Also fetch user details to check online status
             const userResponse = await userApi.getUserById(id as string);
-            setIsOnline(userResponse.data.user.is_online === 1);
+            setIsOnline(userResponse.data.user.is_online === 'online');
         } catch (error) {
             console.error('Error fetching messages:', error);
         } finally {
@@ -163,7 +160,13 @@ export default function ChatScreen() {
 
                 <View style={styles.userInfo}>
                     <Image
-                        source={image || 'https://ui-avatars.com/api/?name=' + name}
+                        source={
+                            image
+                                ? (String(image).startsWith('http') || String(image).startsWith('file')
+                                    ? String(image)
+                                    : `${BASE_URL.replace(/\/$/, '')}/${String(image).replace(/^\//, '')}`)
+                                : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(String(name))
+                        }
                         style={styles.avatar}
                     />
                     <View style={styles.userTextInfo}>

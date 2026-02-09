@@ -14,26 +14,23 @@ import { router } from 'expo-router';
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from 'expo-image';
 import { userApi } from "../../api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuthStore } from "../../hooks/useAuthStore";
+import { BASE_URL } from "../../constants/Config";
 
 export default function ChatsScreen() {
   const [users, setUsers] = useState<any[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [myId, setMyId] = useState<number | null>(null);
+  const { user: currentUser } = useAuthStore();
+  const myId = currentUser?.user_id;
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const userData = await AsyncStorage.getItem('user');
-        if (userData) {
-          setMyId(JSON.parse(userData).user_id);
-        }
-
         const response = await userApi.getUsers();
         // Filter out myself
-        const otherUsers = response.data.users ? response.data.users.filter((u: any) => u.user_id !== (myId || JSON.parse(userData || '{}').user_id)) : [];
+        const otherUsers = response.data.users ? response.data.users.filter((u: any) => u.user_id !== myId) : [];
         setUsers(otherUsers);
         setFilteredUsers(otherUsers);
       } catch (error) {
@@ -52,7 +49,8 @@ export default function ChatsScreen() {
       return;
     }
     const filtered = users.filter(u =>
-      u.number.toLowerCase().includes(text.toLowerCase())
+      (u.email && u.email.toLowerCase().includes(text.toLowerCase())) ||
+      (u.number && u.number.toLowerCase().includes(text.toLowerCase()))
     );
     setFilteredUsers(filtered);
   };
@@ -62,21 +60,27 @@ export default function ChatsScreen() {
       style={styles.userCard}
       onPress={() => router.push({
         pathname: "/chat/[id]",
-        params: { id: item.user_id, name: item.name || item.number, image: item.profile_image }
+        params: { id: item.user_id, name: item.name || item.email, image: item.profile_image }
       })}
     >
       <View style={styles.avatarContainer}>
         <Image
-          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + (item.name || item.number)}
+          source={
+            item.profile_image
+              ? (item.profile_image.startsWith('http') || item.profile_image.startsWith('file')
+                ? item.profile_image
+                : `${BASE_URL.replace(/\/$/, '')}/${item.profile_image.replace(/^\//, '')}`)
+              : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(item.name || item.email)
+          }
           style={styles.avatar}
         />
-        {item.is_online === 1 && <View style={styles.onlineBadge} />}
+        {item.is_online === 'online' && <View style={styles.onlineBadge} />}
       </View>
 
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name || item.number}</Text>
+        <Text style={styles.userName}>{item.name || item.email}</Text>
         <Text style={styles.userStatus}>
-          {item.is_online === 1 ? 'Available' : 'Seen ' + (item.last_seen ? new Date(item.last_seen).toLocaleDateString() : 'recently')}
+          {item.is_online === 'online' ? 'Available' : 'Seen ' + (item.last_seen ? new Date(item.last_seen).toLocaleDateString() : 'recently')}
         </Text>
       </View>
 
@@ -103,7 +107,7 @@ export default function ChatsScreen() {
           <Ionicons name="search-outline" size={20} color="#94a3b8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by number..."
+            placeholder="Search by email or number..."
             value={search}
             onChangeText={handleSearch}
           />

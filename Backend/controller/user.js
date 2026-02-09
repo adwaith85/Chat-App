@@ -1,16 +1,16 @@
 import pool from '../db.js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-
+import { transporter } from '../mailer.js';
 dotenv.config();
 
 // Request OTP - Login/Signup start
 export const requestOTP = async (req, res) => {
     try {
-        const { number } = req.body;
+        const { email, name } = req.body;
 
-        if (!number) {
-            return res.status(400).json({ message: "Mobile number is required" });
+        if (!email) {
+            return res.status(400).json({ message: "Email is required" });
         }
 
         // generate 6-digit OTP
@@ -19,8 +19,8 @@ export const requestOTP = async (req, res) => {
 
         // check if user exists
         const [users] = await pool.query(
-            "SELECT * FROM users WHERE number = ?",
-            [number]
+            "SELECT * FROM users WHERE email = ?",
+            [email]
         );
 
         if (users.length > 0) {
@@ -28,25 +28,40 @@ export const requestOTP = async (req, res) => {
             await pool.query(
                 `UPDATE users 
          SET otp = ?, otp_expires_at = ? 
-         WHERE number = ?`,
-                [otp, otpExpiry, number]
+         WHERE email = ?`,
+                [otp, otpExpiry, email]
             );
         } else {
-            // create new user with OTP
+            // create new user with OTP and optional name
             await pool.query(
-                `INSERT INTO users (number, otp, otp_expires_at) 
-         VALUES (?, ?, ?)`,
-                [number, otp, otpExpiry]
+                `INSERT INTO users (email, name, otp, otp_expires_at) 
+         VALUES (?, ?, ?, ?)`,
+                [email, name || null, otp, otpExpiry]
             );
         }
 
-        // TODO: send OTP via SMS gateway. For now, just log it.
-        console.log(`OTP for ${number}: ${otp}`);
+        // TODO: send OTP via Email gateway. For now, just log it.
+        console.log(`OTP for ${email}: ${otp}`);
+
+
+        transporter.sendMail({
+            from: `"Your App Name" <${process.env.SMTP_USER}>`,
+            to: email,
+            subject: "Your OTP Code",
+            html: `
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>OTP Verification</h2>
+                    <p>Your OTP is:</p>
+                    <h1 style="letter-spacing: 3px;">${otp}</h1>
+                    <p>This OTP will expire in <b>5 minutes</b>.</p>
+                </div>
+            `,
+        });
 
         res.status(200).json({
             success: true,
             message: "OTP sent successfully",
-            otp: otp // Returning OTP for testing as requested by frontend
+
         });
 
     } catch (error) {
@@ -58,18 +73,18 @@ export const requestOTP = async (req, res) => {
 // Verify OTP - Login/Signup complete
 export const verifyOTP = async (req, res) => {
     try {
-        const { number, otp } = req.body;
+        const { email, otp } = req.body;
 
-        if (!number || !otp) {
+        if (!email || !otp) {
             return res.status(400).json({ message: "Number and OTP required" });
         }
 
         const [users] = await pool.query(
             `SELECT * FROM users 
-       WHERE number = ? 
+       WHERE email = ? 
        AND otp = ? 
        AND otp_expires_at >= NOW()`,
-            [number, otp]
+            [email, otp]
         );
 
         if (users.length === 0) {
@@ -83,15 +98,15 @@ export const verifyOTP = async (req, res) => {
             `UPDATE users 
        SET otp = NULL,
            otp_expires_at = NULL,
-           is_verified = 1,
-           is_online = 1
+           is_verified = 'yes',
+           is_online = 'online'
        WHERE user_id = ?`,
             [user.user_id]
         );
 
         // Generate JWT token
         const token = jwt.sign(
-            { user_id: user.user_id, number: user.number },
+            { user_id: user.user_id, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -102,10 +117,9 @@ export const verifyOTP = async (req, res) => {
             token,
             user: {
                 user_id: user.user_id,
-                number: user.number,
-                name: user.name,
-                is_verified: 1,
                 email: user.email,
+                name: user.name,
+                is_verified: 'yes',
                 profile_image: user.profile_image
             }
         });
@@ -148,7 +162,7 @@ export const Logout = async (req, res) => {
 
         await pool.query(
             `UPDATE users 
-       SET is_online = 0, last_seen = NOW() 
+       SET is_online = 'offline', last_seen = NOW() 
        WHERE user_id = ?`,
             [user_id]
         );
@@ -228,15 +242,12 @@ export const getUserById = async (req, res) => {
 export const updateUser = async (req, res) => {
     try {
         const user_id = req.user.user_id; // Usually we update the logged in user's profile
-        let { name, email } = req.body;
+        let { name, number } = req.body;
 
         let profile_image = req.body.profile_image;
 
         // If a file was uploaded, use the generated path
         if (req.file) {
-            // Assuming your server is hosted at http://<IP>:3000
-            // You might want to save just the relative path or the full URL
-            // Here saving the relative path for flexibility
             profile_image = `uploads/${req.file.filename}`;
         }
 
@@ -249,9 +260,9 @@ export const updateUser = async (req, res) => {
             values.push(name);
         }
 
-        if (email !== undefined) {
-            fields.push('email = ?');
-            values.push(email);
+        if (number !== undefined) {
+            fields.push('number = ?');
+            values.push(number);
         }
 
         if (profile_image !== undefined) {

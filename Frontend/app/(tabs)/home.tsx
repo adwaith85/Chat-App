@@ -15,12 +15,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useFocusEffect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from 'expo-image';
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { chatApi } from "../../api";
 import { useSocket } from "../../hooks/useSocket";
+import { useAuthStore } from "../../hooks/useAuthStore";
+import { BASE_URL } from "../../constants/Config";
 
 export default function Home() {
-  const [userName, setUserName] = useState('');
+  const { user } = useAuthStore();
   const [recentChats, setRecentChats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,12 +29,6 @@ export default function Home() {
 
   const loadData = async () => {
     try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) {
-        const parsed = JSON.parse(userData);
-        setUserName(parsed.name || 'Explorer');
-      }
-
       const response = await chatApi.getRecentChats();
       setRecentChats(response.data);
     } catch (error) {
@@ -89,10 +84,16 @@ export default function Home() {
     >
       <View style={styles.avatarContainer}>
         <Image
-          source={item.profile_image || 'https://ui-avatars.com/api/?name=' + (item.name || item.number)}
+          source={
+            item.profile_image
+              ? (item.profile_image.startsWith('http') || item.profile_image.startsWith('file')
+                ? item.profile_image
+                : `${BASE_URL.replace(/\/$/, '')}/${item.profile_image.replace(/^\//, '')}`)
+              : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(item.name || item.number)
+          }
           style={styles.chatAvatar}
         />
-        {item.is_online === 1 && <View style={styles.onlineBadge} />}
+        {item.is_online === 'online' && <View style={styles.onlineBadge} />}
       </View>
 
       <View style={styles.chatInfo}>
@@ -123,7 +124,7 @@ export default function Home() {
       {/* Top Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greetingText}>Hello, {userName || 'Explorer'}</Text>
+          <Text style={styles.greetingText}>Hello, {user?.name || 'Explorer'}</Text>
           <Text style={styles.appNameText}>Talkies</Text>
         </View>
         <TouchableOpacity style={styles.searchBtn}>

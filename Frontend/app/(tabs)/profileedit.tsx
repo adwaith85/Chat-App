@@ -17,11 +17,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from '../../hooks/useAuthStore';
 import { userApi } from '../../api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const ProfileEditScreen = () => {
+    const { user, setAuth, token } = useAuthStore();
     const [formData, setFormData] = useState({
         email: '',
         profile_image: null as any, // File object or uri string from picker
@@ -32,21 +33,16 @@ const ProfileEditScreen = () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const loadUserData = async () => {
-            const userData = await AsyncStorage.getItem('user');
-            if (userData) {
-                const parsed = JSON.parse(userData);
-                setFormData({
-                    email: parsed.email || '',
-                    profile_image: null,
-                    number: parsed.number || '',
-                    name: parsed.name || '',
-                });
-                setDisplayImage(parsed.profile_image || '');
-            }
-        };
-        loadUserData();
-    }, []);
+        if (user) {
+            setFormData({
+                email: user.email || '',
+                profile_image: null,
+                number: user.number || '',
+                name: user.name || '',
+            });
+            setDisplayImage(user.profile_image || '');
+        }
+    }, [user]);
 
     const pickImage = async () => {
         // No permissions request is necessary for launching the image library
@@ -67,8 +63,8 @@ const ProfileEditScreen = () => {
         setLoading(true);
         try {
             const data = new FormData();
-            data.append('email', formData.email);
             data.append('name', formData.name);
+            data.append('number', formData.number);
 
             if (formData.profile_image) {
                 // If it's a new file selected from picker
@@ -80,20 +76,15 @@ const ProfileEditScreen = () => {
                     name: `profile.${fileType}`,
                     type: `image/${fileType}`,
                 } as any);
-            } else {
-                // Keep existing image logic if you want, but backend update skips undefined fields
-                // If user wants to KEEP existing image, we don't send anything.
             }
 
             const response = await userApi.updateProfile(data);
 
-            // Update local storage with response from server
-            const userData = await AsyncStorage.getItem('user');
-            if (userData && response.data.user) {
-                const parsed = JSON.parse(userData);
+            // Update store with response from server
+            if (response.data.user && token) {
                 // Merge existing with new updates
-                const updated = { ...parsed, ...response.data.user };
-                await AsyncStorage.setItem('user', JSON.stringify(updated));
+                const updated = { ...user, ...response.data.user };
+                await setAuth(token, updated);
             }
 
             Alert.alert('Success', 'Profile updated successfully');
@@ -185,20 +176,20 @@ const ProfileEditScreen = () => {
 
                         <Animated.View entering={FadeInDown.delay(300).springify()}>
                             <InputField
-                                label="Phone Number (Verified)"
+                                label="Phone Number"
                                 value={formData.number}
+                                onChangeText={(text: string) => setFormData({ ...formData, number: text })}
                                 icon="call-outline"
-                                editable={false}
+                                keyboardType="phone-pad"
                             />
                         </Animated.View>
 
                         <Animated.View entering={FadeInDown.delay(400).springify()}>
                             <InputField
-                                label="Email Address"
+                                label="Email Address (Verified)"
                                 value={formData.email}
-                                onChangeText={(text: string) => setFormData({ ...formData, email: text })}
                                 icon="mail-outline"
-                                keyboardType="email-address"
+                                editable={false}
                             />
                         </Animated.View>
                     </View>
@@ -209,7 +200,7 @@ const ProfileEditScreen = () => {
                     >
                         <Ionicons name="information-circle-outline" size={20} color="#6366F1" />
                         <Text style={styles.infoBoxText}>
-                            Your phone number is verified and cannot be changed. You can update your name, email and profile picture.
+                            Your email address is verified and cannot be changed. You can update your name, phone number and profile picture.
                         </Text>
                     </Animated.View>
                 </ScrollView>

@@ -26,12 +26,12 @@ export const initSocket = (server) => {
 
                 // Update online status in users table
                 await pool.execute(
-                    'UPDATE users SET is_online = 1, last_seen = NOW() WHERE user_id = ?',
+                    "UPDATE users SET is_online = 'online', last_seen = NOW() WHERE user_id = ?",
                     [currentUserId]
                 );
 
                 // Notify others
-                io.emit('user_status', { user_id: currentUserId, is_online: 1 });
+                io.emit('user_status', { user_id: currentUserId, is_online: 'online' });
 
             } catch (err) {
                 console.error('Socket Auth Error:', err.message);
@@ -89,10 +89,10 @@ export const initSocket = (server) => {
                 console.log(`User ${currentUserId} disconnected`);
                 try {
                     await pool.execute(
-                        'UPDATE users SET is_online = 0, last_seen = NOW() WHERE user_id = ?',
+                        "UPDATE users SET is_online = 'offline', last_seen = NOW() WHERE user_id = ?",
                         [currentUserId]
                     );
-                    io.emit('user_status', { user_id: currentUserId, is_online: 0, last_seen: new Date() });
+                    io.emit('user_status', { user_id: currentUserId, is_online: 'offline', last_seen: new Date() });
                 } catch (err) {
                     console.error('Socket Disconnect Error:', err);
                 }

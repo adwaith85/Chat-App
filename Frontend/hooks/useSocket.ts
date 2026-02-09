@@ -36,14 +36,18 @@ export const useSocket = () => {
 
             socketInstance.on('connect', handleConnect);
 
-            socketInstance.on('disconnect', async () => {
-                console.log('Socket disconnected');
+            socketInstance.on('disconnect', (reason) => {
+                console.log('Socket disconnected:', reason);
                 setIsConnected(false);
 
-                // Check if disconnection was unexpected (token still exists)
-                const token = await AsyncStorage.getItem('token');
-                if (token) {
-                    router.replace('/+not-found');
+                // Only redirect if the disconnection was unintentional (e.g., server down)
+                // and we still have a token (meaning we should be logged in)
+                if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'ping timeout') {
+                    AsyncStorage.getItem('token').then(token => {
+                        if (token) {
+                            router.replace('/+not-found');
+                        }
+                    });
                 }
             });
 
