@@ -40,7 +40,7 @@ const ProfileEditScreen = () => {
                 number: user.number || '',
                 name: user.name || '',
             });
-            setDisplayImage(user.profile_image || '');
+            setDisplayImage(user.profile_image.uri || '');
         }
     }, [user]);
 
@@ -66,15 +66,11 @@ const ProfileEditScreen = () => {
             data.append('name', formData.name);
             data.append('number', formData.number);
 
-            if (formData.profile_image) {
-                // If it's a new file selected from picker
-                const uriParts = formData.profile_image.uri.split('.');
-                const fileType = uriParts[uriParts.length - 1];
-
+            if (formData.profile_image?.uri) {
                 data.append('profile_image', {
                     uri: formData.profile_image.uri,
-                    name: `profile.${fileType}`,
-                    type: `image/${fileType}`,
+                    name: `profile_${Date.now()}.jpg`,
+                    type: 'image/jpeg',
                 } as any);
             }
 
