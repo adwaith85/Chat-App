@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import http from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -16,12 +17,21 @@ const PORT = process.env.PORT || 3000;
 initSocket(server);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+
+app.use('/uploads', express.static('uploads'));
+
 // Routes
-app.use('/api', userRouter);
+app.use("/", userRouter);
 app.use('/api', chatRouter);
 
 // Default route
@@ -30,6 +40,6 @@ app.get('/', (req, res) => {
 });
 
 // Start server
-server.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
 });

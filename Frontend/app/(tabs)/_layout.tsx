@@ -6,14 +6,15 @@ export default function TabLayout() {
         <Tabs
             screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: "#4F46E5",
+                tabBarActiveTintColor: "#6366f1",
+                tabBarInactiveTintColor: "#94a3b8",
                 tabBarStyle: {
                     backgroundColor: '#FFFFFF',
                     borderTopWidth: 1,
-                    borderTopColor: '#F3F4F6',
-                    height: 60,
-                    paddingBottom: 10,
-                    paddingTop: 5,
+                    borderTopColor: '#F1F5F9',
+                    height: 55,
+                    paddingBottom: 6,
+                    paddingTop: 6,
                 }
             }}
         >
@@ -45,7 +46,7 @@ export default function TabLayout() {
                 }}
             />
             <Tabs.Screen
-                name="profile-edit"
+                name="profileedit"
                 options={{
                     href: null,
                     tabBarIcon: ({ color, size }) => (
