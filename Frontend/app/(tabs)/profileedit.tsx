@@ -21,6 +21,25 @@ import { useAuthStore } from '../../hooks/useAuthStore';
 import { userApi } from '../../api';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+// InputField extracted outside ProfileEditScreen to prevent re-creation on every render
+// (which was causing the keyboard to dismiss on each keystroke)
+const InputField = ({ label, value, onChangeText, icon, keyboardType = 'default', editable = true }: any) => (
+    <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <View style={[styles.inputWrapper, !editable && styles.disabledInput]}>
+            <Ionicons name={icon} size={20} color={editable ? "#6366F1" : "#94A3B8"} style={styles.inputIcon} />
+            <TextInput
+                style={[styles.input, !editable && { color: '#94A3B8' }]}
+                value={value}
+                onChangeText={onChangeText}
+                keyboardType={keyboardType}
+                placeholderTextColor="#9CA3AF"
+                editable={editable}
+            />
+        </View>
+    </View>
+);
+
 const ProfileEditScreen = () => {
     const { user, setAuth, token } = useAuthStore();
     const [formData, setFormData] = useState({
@@ -40,7 +59,7 @@ const ProfileEditScreen = () => {
                 number: user.number || '',
                 name: user.name || '',
             });
-            setDisplayImage(user.profile_image.uri || '');
+            setDisplayImage(user?.profile_image?.uri || '');
         }
     }, [user]);
 
@@ -93,23 +112,6 @@ const ProfileEditScreen = () => {
         }
     };
 
-    const InputField = ({ label, value, onChangeText, icon, keyboardType = 'default', editable = true }: any) => (
-        <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>{label}</Text>
-            <View style={[styles.inputWrapper, !editable && styles.disabledInput]}>
-                <Ionicons name={icon} size={20} color={editable ? "#6366F1" : "#94A3B8"} style={styles.inputIcon} />
-                <TextInput
-                    style={[styles.input, !editable && { color: '#94A3B8' }]}
-                    value={value}
-                    onChangeText={onChangeText}
-                    keyboardType={keyboardType}
-                    placeholderTextColor="#9CA3AF"
-                    editable={editable}
-                />
-            </View>
-        </View>
-    );
-
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -134,7 +136,7 @@ const ProfileEditScreen = () => {
                     </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps='handled'>
                     {/* Profile Image Section */}
                     <Animated.View
                         entering={FadeInDown.delay(100).springify()}
